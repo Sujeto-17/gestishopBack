@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<fontFamilies>
+    <fontFamily name="Montserrat">
+        <!-- Normal Font -->
+        <normal><![CDATA[static/fonts/montserrat/Montserrat-Regular.ttf]]></normal>
+        <!-- Bold Font -->
+        <bold><![CDATA[static/fonts/montserrat/Montserrat-Bold.ttf]]></bold>
+        <!-- Italic Font -->
+        <italic><![CDATA[static/fonts/montserrat/Montserrat-Italic.ttf]]></italic>
+        <!-- Bolt italic Font -->
+        <boldItalic><![CDATA[static/fonts/montserrat/Montserrat-BoldItalic.ttf]]></boldItalic>
+        <!-- Black Font -->
+        <boldItalic><![CDATA[static/fonts/montserrat/Montserrat-Black.ttf]]></boldItalic>
+        <!-- Is font is embedded in PDF -->
+        <pdfEmbedded><![CDATA[true]]></pdfEmbedded>
+    </fontFamily>
+</fontFamilies>

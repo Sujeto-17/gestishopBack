@@ -1,5 +1,6 @@
 package mx.com.gestishop.core.exception;
 
+import lombok.extern.slf4j.Slf4j;
 import mx.com.gestishop.core.dto.ApiDataResponseDTO;
 import mx.com.gestishop.core.generic.ApiResponseBuilder;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +13,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
  * las excepciones lanzadas por los controladores REST y construir respuestas
  * HTTP adecuadas utilizando ApiResponseBuilder.
  */
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -25,6 +27,10 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(ApiResponseException.class)
     public ResponseEntity<ApiDataResponseDTO<Object>> handleApiException(ApiResponseException ex) {
+        log.warn("API ERROR: {} - data: {}",
+                ex.getApiCodeResponse().getCodigo(),
+                ex.getData());
+
         return ApiResponseBuilder.build(ex.getApiCodeResponse(), ex.getData());
     }
 

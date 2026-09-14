@@ -43,5 +43,4 @@ public enum AlgorithmHash {
             throw new IllegalStateException("Algoritmo no soportado: " + this, e);
         }
     }
-
 }

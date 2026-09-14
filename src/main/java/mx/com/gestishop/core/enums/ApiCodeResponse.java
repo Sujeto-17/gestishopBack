@@ -30,6 +30,8 @@ public enum ApiCodeResponse implements ApiCode {
     REQUIRED_DATA("BE_RD", HttpStatus.BAD_REQUEST, "Dato requerido", ApiCodeType.BUSINESS_ERROR),
     RESOURCE_NOT_FOUND("BE_RNF", HttpStatus.NOT_FOUND, "Recurso no encontrado", ApiCodeType.BUSINESS_ERROR),
     CONFLICT("BE_C", HttpStatus.CONFLICT, "Conflicto con la petición", ApiCodeType.BUSINESS_ERROR),
+    UNAUTHORIZED("BE_UA", HttpStatus.UNAUTHORIZED, "No autenticado. Se requiere iniciar sesión.", ApiCodeType.BUSINESS_ERROR),
+    FORBIDDEN("BE_FB", HttpStatus.FORBIDDEN, "No tienes permisos para realizar esta acción.", ApiCodeType.BUSINESS_ERROR),
 
     // ==============================
     // ERROR TÉCNICO

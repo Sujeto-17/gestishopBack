@@ -306,6 +306,41 @@ COMMENT ON TABLE rol_modulos IS
 
 
 -- ============================================================
+-- REFRESH TOKENS (sesiones activas, revocables)
+-- ============================================================
+CREATE TABLE refresh_tokens (
+    id_refresh_token    BIGSERIAL PRIMARY KEY,
+    id_usuario          BIGINT NOT NULL REFERENCES usuarios(id_usuario),
+    token_hash          VARCHAR(255) NOT NULL,   -- SHA-256 del token real, nunca el token en claro
+    ip_origen           VARCHAR(45),              -- IPv4/IPv6 de origen, para auditoría
+    user_agent          VARCHAR(255),
+    fecha_expiracion    TIMESTAMPTZ NOT NULL,
+    revocado            BOOLEAN NOT NULL DEFAULT false,
+    fecha_revocado       TIMESTAMPTZ,
+    created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE refresh_tokens IS
+  'Sesiones de refresh token activas. Cada login genera una fila. Permite revocar sesiones individuales (logout) o todas (robo detectado) sin esperar expiración.';
+
+CREATE INDEX ix_refresh_tokens_usuario ON refresh_tokens(id_usuario);
+CREATE UNIQUE INDEX ux_refresh_tokens_hash ON refresh_tokens(token_hash);
+
+-- ============================================================
+-- INTENTOS DE LOGIN FALLIDOS (rate limiting / bloqueo temporal)
+-- ============================================================
+CREATE TABLE intentos_login (
+    id_intento      BIGSERIAL PRIMARY KEY,
+    correo          VARCHAR(150) NOT NULL,
+    ip_origen       VARCHAR(45),
+    exitoso         BOOLEAN NOT NULL,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+COMMENT ON TABLE intentos_login IS
+  'Bitácora de intentos de login (exitosos y fallidos) usada para bloqueo temporal por fuerza bruta.';
+
+CREATE INDEX ix_intentos_login_correo_fecha ON intentos_login(correo, created_at);
+
+-- ============================================================
 -- SEED (datos iniciales de referencia)
 -- ============================================================
 

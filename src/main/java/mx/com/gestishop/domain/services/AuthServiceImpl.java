@@ -1,6 +1,7 @@
 package mx.com.gestishop.domain.services;
 
 import lombok.RequiredArgsConstructor;
+import mx.com.gestishop.application.dto.ContextoSesionDTO;
 import mx.com.gestishop.application.dto.request.CambiarPasswordRequestDTO;
 import mx.com.gestishop.application.dto.request.LoginRequestDTO;
 import mx.com.gestishop.application.dto.response.LoginResponseDTO;
@@ -17,7 +18,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -36,12 +36,11 @@ public class AuthServiceImpl implements AuthService {
 
     private final UsuarioRepository usuarioRepository;
     private final IntentoLoginRepository intentoLoginRepository;
-    private final AdminNegocioRepository adminNegocioRepository;
-    private final TrabajadorRepository trabajadorRepository;
-    private final RolModuloRepository rolModuloRepository;
     private final RefreshTokenService refreshTokenService;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
+
+    private final SesionContextResolver sesionContextResolver;
 
     // Umbral de intentos fallidos antes de bloquear temporalmente el login de un correo.
     private static final int MAX_INTENTOS = 5;
@@ -88,60 +87,17 @@ public class AuthServiceImpl implements AuthService {
                     Map.of("detalle", "La cuenta está inactiva. Contacta al administrador."));
         }
 
-        // 5. Resolver contexto según tipo de usuario: a qué negocio pertenece,
-        //    qué nivel de acceso tiene y qué módulos puede ver en el menú.
-        Long idNegocio = null;
-        String nivelAcceso = null;
-        List<String> modulos;
-
-        switch (usuario.getTipoUsuario()) {
-
-            case "admin" -> {
-                // Un admin puede tener más de un negocio (admin_negocio es N:M),
-                // pero para el login tomamos el primero registrado.
-                AdminNegocio relacion = RepositoryExecutor.execute(
-                        () -> adminNegocioRepository.buscarPrimerNegocioDeUsuario(usuario.getIdUsuario())
-                                .orElseThrow(() -> new ApiResponseException(ApiCodeResponse.CONFLICT,
-                                        Map.of("detalle", "El usuario admin no tiene negocio asignado."))),
-                        "AdminNegocio", "login"
-                );
-                idNegocio = relacion.getNegocio().getIdNegocio();
-                // El admin ve TODOS los módulos que incluya el plan de su negocio, sin restricción adicional.
-                modulos = relacion.getNegocio().getPlan().getModulos().stream()
-                        .map(CatModulo::getNombre)
-                        .toList();
-            }
-
-            case "trabajador" -> {
-                Trabajador trabajador = RepositoryExecutor.execute(
-                        () -> trabajadorRepository.buscarPorUsuario(usuario.getIdUsuario())
-                                .orElseThrow(() -> new ApiResponseException(ApiCodeResponse.CONFLICT,
-                                        Map.of("detalle", "El trabajador no tiene datos laborales registrados."))),
-                        "Trabajador", "login"
-                );
-                idNegocio = trabajador.getNegocio().getIdNegocio();
-                nivelAcceso = trabajador.getNivelAcceso();
-                // El trabajador solo ve los módulos permitidos para su nivel de acceso
-                // (gerente | estandar), según la matriz definida en rol_modulos.
-                modulos = RepositoryExecutor.execute(
-                                () -> rolModuloRepository.buscarPorTipoYNivel("trabajador", nivelAcceso),
-                                "RolModulo", "login"
-                        ).stream()
-                        .map(rm -> rm.getModulo().getNombre())
-                        .toList();
-            }
-
-            // superadmin no pertenece a ningún negocio ni tiene lista de módulos restringida:
-            // su propio panel siempre muestra todo, por eso se le devuelve una lista vacía.
-            default -> modulos = List.of();
-        }
+        // 5. Resolver contexto: a qué negocio pertenece, nivel de acceso, módulos permitidos.
+        // La lógica vive en SesionContextResolver, compartida con RefreshTokenServiceImpl.
+        ContextoSesionDTO contexto = sesionContextResolver.resolver(usuario);
 
         // 6. Registrar el momento del acceso exitoso
         usuario.setUltimoAcceso(OffsetDateTime.now());
         RepositoryExecutor.executeVoid(() -> usuarioRepository.save(usuario), "Usuario", "actualizarUltimoAcceso");
 
         // 7. Emitir el access token (JWT corto) y el refresh token (opaco, revocable, largo)
-        String accessToken = jwtTokenProvider.generarAccessToken(usuario, idNegocio, nivelAcceso, modulos);
+        String accessToken = jwtTokenProvider.generarAccessToken(
+                usuario, contexto.getIdNegocio(), contexto.getNivelAcceso(), contexto.getModulos());
         String refreshToken = refreshTokenService.crear(usuario, ip, userAgent);
 
         return LoginResponseDTO.builder()
@@ -149,9 +105,9 @@ public class AuthServiceImpl implements AuthService {
                 .refreshToken(refreshToken)
                 .debeActualizarPassword(usuario.getDebeActualizarPassword())
                 .tipoUsuario(usuario.getTipoUsuario())
-                .nivelAcceso(nivelAcceso)
-                .idNegocio(idNegocio)
-                .modulos(modulos)
+                .nivelAcceso(contexto.getNivelAcceso())
+                .idNegocio(contexto.getIdNegocio())
+                .modulos(contexto.getModulos())
                 .build();
     }
 

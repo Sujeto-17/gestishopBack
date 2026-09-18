@@ -13,8 +13,8 @@ import java.util.Optional;
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
     /**
-     * Busca una sesión de refresh token por su hash (nunca se busca por el token en claro).
-     * Se usa al refrescar el access token: valida que exista, no esté revocado y no haya expirado.
+            * Busca una sesión de refresh token por su hash (nunca se busca por el token en claro).
+            * Se usa al refrescar el access token: valida que exista, no esté revocado y no haya expirado.
      */
     @Query("""
         SELECT rt FROM RefreshToken rt
@@ -24,6 +24,14 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
         """)
     Optional<RefreshToken> buscarValidoPorHash(@Param("tokenHash") String tokenHash,
                                                @Param("ahora") OffsetDateTime ahora);
+
+    /**
+     * Busca una sesión por su hash SIN filtrar por estado (revocado o expirado).
+     * Se usa exclusivamente para detección de robo: si alguien intenta reutilizar
+     * un token ya rotado (revocado), es señal de que fue robado.
+     */
+    @Query("SELECT rt FROM RefreshToken rt WHERE rt.tokenHash = :tokenHash")
+    Optional<RefreshToken> buscarPorHash(@Param("tokenHash") String tokenHash);
 
     /**
      * Revoca (invalida) una sesión específica por su hash. Se usa en logout normal
@@ -48,5 +56,5 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
         WHERE rt.usuario.idUsuario = :idUsuario
           AND rt.revocado = false
         """)
-    void revocarTodasDelUsuario(@Param("idUsuario") Long idUsuario, @Param("ahora") OffsetDateTime ahora)
+    void revocarTodasDelUsuario(@Param("idUsuario") Long idUsuario, @Param("ahora") OffsetDateTime ahora);
 }

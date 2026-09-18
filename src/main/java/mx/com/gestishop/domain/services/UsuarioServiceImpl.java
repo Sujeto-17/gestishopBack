@@ -3,6 +3,7 @@ package mx.com.gestishop.domain.services;
 import lombok.RequiredArgsConstructor;
 import mx.com.gestishop.application.dto.request.RegistrarUsuarioRequestDTO;
 import mx.com.gestishop.application.dto.response.SesionResponseDTO;
+import mx.com.gestishop.application.mapper.SesionMapper;
 import mx.com.gestishop.core.enums.ApiCodeResponse;
 import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.exception.RepositoryExecutor;
@@ -98,11 +99,6 @@ public class UsuarioServiceImpl implements UsuarioService {
         // en un endpoint aparte (TrabajadorService), ya que requiere más
         // datos laborales que este DTO genérico no contempla.
 
-        return SesionResponseDTO.builder()
-                .uuidUsuario(guardado.getUuidUsuario())
-                .nombre(guardado.getNombre())
-                .correo(guardado.getCorreo())
-                .tipoUsuario(guardado.getTipoUsuario())
-                .build();
+        return SesionMapper.toResponse(guardado);
     }
 }

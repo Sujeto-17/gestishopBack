@@ -44,13 +44,13 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     private final SesionContextResolver sesionContextResolver;
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public String crear(Usuario usuario, String ip, String userAgent) {
 
-        // 1. Generar el token en texto plano (esto es lo único que ve el cliente)
+        // Generar el token en texto plano (esto es lo único que ve el cliente)
         String tokenPlano = SecureTokenUtil.generar();
 
-        // 2. Guardar solo el HASH en BD, nunca el token real
+        // Guardar solo el HASH en BD, nunca el token real
         String hash = HashUtil.hashHex(tokenPlano, AlgorithmHash.SHA256);
 
         OffsetDateTime expiracion = OffsetDateTime.now()
@@ -74,18 +74,18 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public LoginResponseDTO rotar(String refreshTokenPlano) {
         String hash = HashUtil.hashHex(refreshTokenPlano, AlgorithmHash.SHA256);
 
-        // 1. Buscar la sesión SOLO entre las válidas (no revocadas, no expiradas)
+        // Buscar la sesión SOLO entre las válidas (no revocadas, no expiradas)
         Optional<RefreshToken> sesionValida = RepositoryExecutor.execute(
                 () -> refreshTokenRepository.buscarValidoPorHash(hash, OffsetDateTime.now()),
                 "RefreshToken", "rotar"
         );
 
         if (sesionValida.isEmpty()) {
-            // 2. No es válida: se busca SIN filtro de estado para distinguir
+            // No es válida: se busca SIN filtro de estado para distinguir
             //    "robo" (token ya rotado que alguien reutiliza) de un simple
             //    token vencido o inexistente.
             Optional<RefreshToken> sesionCualquiera = RepositoryExecutor.execute(
@@ -113,13 +113,13 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
         RefreshToken sesion = sesionValida.get();
         Usuario usuario = sesion.getUsuario();
 
-        // 3. Rotación: se revoca el token usado ANTES de emitir uno nuevo
+        // Rotación: se revoca el token usado ANTES de emitir uno nuevo
         RepositoryExecutor.executeVoid(
                 () -> refreshTokenRepository.revocarPorHash(hash, OffsetDateTime.now()),
                 "RefreshToken", "rotar"
         );
 
-        // 4. Se vuelve a resolver el contexto (por si cambiaron permisos/negocio
+        // Se vuelve a resolver el contexto (por si cambiaron permisos/negocio
         //    desde el último login) y se emite un nuevo par de tokens
         ContextoSesionDTO contexto = sesionContextResolver.resolver(usuario);
 
@@ -139,7 +139,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void revocar(String refreshTokenPlano) {
         String hash = HashUtil.hashHex(refreshTokenPlano, AlgorithmHash.SHA256);
         RepositoryExecutor.executeVoid(
@@ -149,7 +149,7 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
     }
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public void revocarTodasDelUsuario(Long idUsuario) {
         RepositoryExecutor.executeVoid(
                 () -> refreshTokenRepository.revocarTodasDelUsuario(idUsuario, OffsetDateTime.now()),

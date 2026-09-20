@@ -35,10 +35,10 @@ public class UsuarioServiceImpl implements UsuarioService {
     private final PasswordEncoder passwordEncoder;
 
     @Override
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
     public SesionResponseDTO registrar(RegistrarUsuarioRequestDTO dto) {
 
-        // 1. Validar que el correo no esté ya en uso por un usuario activo
+        // Validar que el correo no esté ya en uso por un usuario activo
         boolean correoExiste = RepositoryExecutor.execute(
                 () -> usuarioRepository.existeCorreoActivo(dto.getCorreo()),
                 "Usuario", "validarCorreo"
@@ -49,7 +49,7 @@ public class UsuarioServiceImpl implements UsuarioService {
                     Map.of("detalle", "Ya existe una cuenta registrada con ese correo."));
         }
 
-        // 2. Si es admin o trabajador, el negocio es obligatorio y debe existir
+        // Si es admin o trabajador, el negocio es obligatorio y debe existir
         Negocio negocio = null;
         if (!"superadmin".equals(dto.getTipoUsuario())) {
             if (dto.getIdNegocio() == null) {
@@ -64,7 +64,7 @@ public class UsuarioServiceImpl implements UsuarioService {
             );
         }
 
-        // 3. Construir la entidad Usuario. La contraseña se encripta aquí,
+        // Construir la entidad Usuario. La contraseña se encripta aquí,
         //    NUNCA se guarda en texto plano en ningún punto del flujo.
         Usuario usuario = Usuario.builder()
                 .tipoUsuario(dto.getTipoUsuario())
@@ -81,7 +81,7 @@ public class UsuarioServiceImpl implements UsuarioService {
                 "Usuario", "crear"
         );
 
-        // 4. Si es admin, se crea la relación con su negocio en admin_negocio
+        // Si es admin, se crea la relación con su negocio en admin_negocio
         if ("admin".equals(dto.getTipoUsuario())) {
             AdminNegocio relacion = AdminNegocio.builder()
                     .usuario(guardado)

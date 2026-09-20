@@ -23,9 +23,9 @@ public interface RefreshTokenService {
      */
     LoginResponseDTO rotar(String refreshTokenPlano);
 
-    /** Revoca una sesión específica (logout normal). */
+    // Revoca una sesión específica (logout normal)
     void revocar(String refreshTokenPlano);
 
-    /** Revoca todas las sesiones activas de un usuario (cambio de password, robo detectado). */
+    // Revoca todas las sesiones activas de un usuario (cambio de password, robo detectado)
     void revocarTodasDelUsuario(Long idUsuario);
 }

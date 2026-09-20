@@ -47,34 +47,25 @@ public class AuthServiceImpl implements AuthService {
     // Ventana de tiempo (en minutos) sobre la que se cuentan los intentos fallidos.
     private static final int VENTANA_MINUTOS = 15;
 
-    /**
-     * Valida credenciales y, si son correctas, resuelve el contexto del usuario
-     * (negocio, nivel de acceso, módulos permitidos) y emite un par de tokens.
-     *
-     * @param dto       correo y contraseña enviados por el cliente
-     * @param ip        IP de origen de la petición, se guarda para auditoría del refresh token
-     * @param userAgent User-Agent del navegador/app que hace login, mismo propósito de auditoría
-     */
     @Override
     @Transactional
     public LoginResponseDTO login(LoginRequestDTO dto, String ip, String userAgent) {
 
-        // 1. Verificar que el correo no esté bloqueado por demasiados intentos fallidos recientes
+        // Verificar que el correo no esté bloqueado por demasiados intentos fallidos recientes
         validarBloqueoPorIntentos(dto.getCorreo());
 
-        // 2. Buscar el usuario por correo (solo activos, deletedAt IS NULL ya filtrado en el repositorio)
+        // Buscar el usuario por correo (solo activos, deletedAt IS NULL ya filtrado en el repositorio)
         Usuario usuario = RepositoryExecutor.execute(
                 () -> usuarioRepository.buscarPorCorreoActivo(dto.getCorreo()).orElse(null),
-                "Usuario", "login"
-        );
+                "Usuario", "login");
 
-        // 3. Validar la contraseña con BCrypt. Se usa un solo booleano combinado
+        // Validar la contraseña con BCrypt. Se usa un solo booleano combinado
         //    (usuario nulo O contraseña incorrecta) para no revelar si el correo existe o no
         //    — evita que un atacante use el login para enumerar correos válidos.
         boolean credencialesValidas = usuario != null
                 && passwordEncoder.matches(dto.getPassword(), usuario.getPasswordHash());
 
-        // 4. Registrar el intento (exitoso o fallido) SIEMPRE, para alimentar el rate limiting
+        // Registrar el intento (exitoso o fallido) SIEMPRE, para alimentar el rate limiting
         registrarIntento(dto.getCorreo(), ip, credencialesValidas);
 
         if (!credencialesValidas) {
@@ -87,15 +78,15 @@ public class AuthServiceImpl implements AuthService {
                     Map.of("detalle", "La cuenta está inactiva. Contacta al administrador."));
         }
 
-        // 5. Resolver contexto: a qué negocio pertenece, nivel de acceso, módulos permitidos.
+        // Resolver contexto: a qué negocio pertenece, nivel de acceso, módulos permitidos.
         // La lógica vive en SesionContextResolver, compartida con RefreshTokenServiceImpl.
         ContextoSesionDTO contexto = sesionContextResolver.resolver(usuario);
 
-        // 6. Registrar el momento del acceso exitoso
+        // Registrar el momento del acceso exitoso
         usuario.setUltimoAcceso(OffsetDateTime.now());
         RepositoryExecutor.executeVoid(() -> usuarioRepository.save(usuario), "Usuario", "actualizarUltimoAcceso");
 
-        // 7. Emitir el access token (JWT corto) y el refresh token (opaco, revocable, largo)
+        // Emitir el access token (JWT corto) y el refresh token (opaco, revocable, largo)
         String accessToken = jwtTokenProvider.generarAccessToken(
                 usuario, contexto.getIdNegocio(), contexto.getNivelAcceso(), contexto.getModulos());
         String refreshToken = refreshTokenService.crear(usuario, ip, userAgent);
@@ -111,33 +102,18 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
-    /**
-     * Renueva la sesión intercambiando un refresh token válido por un nuevo
-     * par access/refresh. La lógica de rotación vive en RefreshTokenService.
-     */
     @Override
     @Transactional
     public LoginResponseDTO refrescarToken(String refreshTokenPlano) {
         return refreshTokenService.rotar(refreshTokenPlano);
     }
 
-    /**
-     * Cierra sesión revocando el refresh token indicado.
-     * El access token sigue siendo válido hasta que expire por sí solo
-     * (máximo 15 min), por eso su vida útil es intencionalmente corta.
-     */
     @Override
     @Transactional
     public void logout(String refreshTokenPlano) {
         refreshTokenService.revocar(refreshTokenPlano);
     }
 
-    /**
-     * Cambia la contraseña del usuario autenticado.
-     * Requiere validar la contraseña actual antes de permitir el cambio.
-     * Al finalizar, revoca TODAS las sesiones activas del usuario como
-     * medida de seguridad (por si el cambio se debe a una sospecha de robo).
-     */
     @Override
     @Transactional
     public void cambiarPassword(CambiarPasswordRequestDTO dto) {

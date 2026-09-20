@@ -13,15 +13,15 @@ import java.util.Optional;
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long> {
 
     /**
-            * Busca una sesión de refresh token por su hash (nunca se busca por el token en claro).
-            * Se usa al refrescar el access token: valida que exista, no esté revocado y no haya expirado.
+     * Busca una sesión de refresh token por su hash (nunca se busca por el token en claro).
+     * Se usa al refrescar el access token: valida que exista, no esté revocado y no haya expirado.
      */
     @Query("""
-        SELECT rt FROM RefreshToken rt
-        WHERE rt.tokenHash = :tokenHash
-          AND rt.revocado = false
-          AND rt.fechaExpiracion > :ahora
-        """)
+            SELECT rt FROM RefreshToken rt
+            WHERE rt.tokenHash = :tokenHash
+              AND rt.revocado = false
+              AND rt.fechaExpiracion > :ahora
+            """)
     Optional<RefreshToken> buscarValidoPorHash(@Param("tokenHash") String tokenHash,
                                                @Param("ahora") OffsetDateTime ahora);
 
@@ -39,10 +39,10 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
      */
     @Modifying
     @Query("""
-        UPDATE RefreshToken rt
-        SET rt.revocado = true, rt.fechaRevocado = :ahora
-        WHERE rt.tokenHash = :tokenHash
-        """)
+            UPDATE RefreshToken rt
+            SET rt.revocado = true, rt.fechaRevocado = :ahora
+            WHERE rt.tokenHash = :tokenHash
+            """)
     void revocarPorHash(@Param("tokenHash") String tokenHash, @Param("ahora") OffsetDateTime ahora);
 
     /**
@@ -51,10 +51,10 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, Long
      */
     @Modifying
     @Query("""
-        UPDATE RefreshToken rt
-        SET rt.revocado = true, rt.fechaRevocado = :ahora
-        WHERE rt.usuario.idUsuario = :idUsuario
-          AND rt.revocado = false
-        """)
+            UPDATE RefreshToken rt
+            SET rt.revocado = true, rt.fechaRevocado = :ahora
+            WHERE rt.usuario.idUsuario = :idUsuario
+              AND rt.revocado = false
+            """)
     void revocarTodasDelUsuario(@Param("idUsuario") Long idUsuario, @Param("ahora") OffsetDateTime ahora);
 }

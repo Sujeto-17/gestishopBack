@@ -47,7 +47,7 @@ public class SecurityConfig {
                         .requestMatchers("/api/v1/negocios/**", "/api/v1/planes/**", "/api/v1/admins/**").hasRole("SUPERADMIN")
                         // admin y trabajador gerente pueden ver productos/proveedores/categorias
                         .requestMatchers("/api/v1/productos/**", "/api/v1/proveedores/**", "/api/v1/categorias/**")
-                        .hasAnyRole("ADMIN", "TRABAJADOR")   // el filtrado fino por nivel_acceso se hace con @PreAuthorize en el método
+                        .hasAnyRole("ADMIN", "TRABAJADOR")   // el filtrado fino por nivel_acceso se hace con @PreAuthorize en el metodo
                         .anyRequest().authenticated()
                 )
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

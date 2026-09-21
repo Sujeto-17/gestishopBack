@@ -9,6 +9,7 @@ import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.exception.RepositoryExecutor;
 import mx.com.gestishop.core.generic.ErrorFactory;
 import mx.com.gestishop.domain.interfaces.NegocioService;
+import mx.com.gestishop.domain.interfaces.SuscripcionService;
 import mx.com.gestishop.domain.model.CatGiroNegocio;
 import mx.com.gestishop.domain.model.Negocio;
 import mx.com.gestishop.domain.model.Plan;
@@ -35,6 +36,8 @@ public class NegocioServiceImpl implements NegocioService {
     private final NegocioRepository negocioRepository;
     private final CatGiroNegocioRepository catGiroNegocioRepository;
     private final PlanRepository planRepository;
+
+    private final SuscripcionService suscripcionService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -67,6 +70,12 @@ public class NegocioServiceImpl implements NegocioService {
         entidad.setPlan(plan);
 
         Negocio guardado = RepositoryExecutor.execute(() -> negocioRepository.save(entidad), "Negocio", "crear");
+
+        // Se crea automáticamente el primer periodo de suscripción (prueba, estatus
+        // 'pendiente'), con las mismas fechas que ya se calcularon para el negocio.
+        // Al estar dentro de la misma transacción @Transactional del metodo, si algo
+        // falla aquí, TAMBIÉN se revierte la creación del negocio (todo o nada)
+        suscripcionService.crearPeriodoInicial(guardado, plan);
 
         return NegocioMapper.toResponse(guardado);
     }

@@ -19,6 +19,6 @@ public interface PlanService {
 
     List<PlanResponseDTO> listarTodos();
 
-    // Lista planes activos filtrados por tipo de sistema, usado en el alta de un negocio
-    List<PlanResponseDTO> listarActivosPorSistema(String sistemaType);
+    // Lista todos los planes activos, con sus módulos ya cargados
+    List<PlanResponseDTO> listarActivos();
 }

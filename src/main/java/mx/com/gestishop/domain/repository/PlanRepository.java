@@ -14,23 +14,22 @@ public interface PlanRepository extends JpaRepository<Plan, Long> {
 
     // Busca un plan por su identificador público, junto con sus módulos ya cargados (evita N+1)
     @Query("""
-        SELECT p FROM Plan p
-        LEFT JOIN FETCH p.modulos
-        WHERE p.uuidPlan = :uuidPlan
-        """)
+            SELECT p FROM Plan p
+            LEFT JOIN FETCH p.modulos
+            WHERE p.uuidPlan = :uuidPlan
+            """)
     Optional<Plan> buscarPorUuidConModulos(@Param("uuidPlan") UUID uuidPlan);
 
-    // Lista los planes activos de un tipo de sistema, usado al mostrar el selector en el alta de negocio
+    // Lista todos los planes activos, con sus módulos ya cargados
     @Query("""
-        SELECT DISTINCT p FROM Plan p
-        LEFT JOIN FETCH p.modulos
-        WHERE p.sistemaType = :sistemaType
-          AND p.estatus = 'activo'
-        ORDER BY p.precio ASC
-        """)
-    List<Plan> buscarActivosPorSistema(@Param("sistemaType") String sistemaType);
+            SELECT DISTINCT p FROM Plan p
+            LEFT JOIN FETCH p.modulos
+            WHERE p.estatus = 'activo'
+            ORDER BY p.precio ASC
+            """)
+    List<Plan> listarActivos();
 
     // Lista TODOS los planes con sus módulos, para el CRUD del superadmin
-    @Query("SELECT DISTINCT p FROM Plan p LEFT JOIN FETCH p.modulos ORDER BY p.sistemaType, p.precio ASC")
+    @Query("SELECT DISTINCT p FROM Plan p LEFT JOIN FETCH p.modulos ORDER BY p.precio ASC")
     List<Plan> listarTodosConModulos();
 }

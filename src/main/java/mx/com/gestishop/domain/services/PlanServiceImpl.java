@@ -93,9 +93,9 @@ public class PlanServiceImpl implements PlanService {
     }
 
     @Override
-    public List<PlanResponseDTO> listarActivosPorSistema(String sistemaType) {
+    public List<PlanResponseDTO> listarActivos() {
         return RepositoryExecutor.execute(
-                        () -> planRepository.buscarActivosPorSistema(sistemaType), "Plan", "listarActivosPorSistema")
+                        () -> planRepository.listarActivos(), "Plan", "listarActivos")
                 .stream().map(PlanMapper::toResponse).toList();
     }
 

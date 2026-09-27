@@ -26,9 +26,6 @@ public class PlanResponseDTO {
     @Schema(description = "Nombre visible, derivado del nivel", example = "Pro")
     private String nombre;
 
-    @Schema(description = "Tipo de sistema", example = "servicio")
-    private String sistemaType;
-
     @Schema(description = "Precio mensual")
     private BigDecimal precio;
 

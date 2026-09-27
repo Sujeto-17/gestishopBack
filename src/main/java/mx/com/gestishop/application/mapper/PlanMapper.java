@@ -32,7 +32,6 @@ public class PlanMapper {
         return Plan.builder()
                 .nivel(dto.getNivel())
                 .nombre(nombreDesdeNivel(dto.getNivel()))
-                .sistemaType(dto.getSistemaType())
                 .precio(dto.getPrecio())
                 .descripcion(dto.getDescripcion())
                 .estatus("activo")
@@ -42,7 +41,6 @@ public class PlanMapper {
     public static void actualizarEntidad(Plan entidad, PlanRequestDTO dto) {
         entidad.setNivel(dto.getNivel());
         entidad.setNombre(nombreDesdeNivel(dto.getNivel()));
-        entidad.setSistemaType(dto.getSistemaType());
         entidad.setPrecio(dto.getPrecio());
         entidad.setDescripcion(dto.getDescripcion());
     }
@@ -53,7 +51,6 @@ public class PlanMapper {
                 .uuidPlan(entidad.getUuidPlan())
                 .nivel(entidad.getNivel())
                 .nombre(entidad.getNombre())
-                .sistemaType(entidad.getSistemaType())
                 .precio(entidad.getPrecio())
                 .descripcion(entidad.getDescripcion())
                 .estatus(entidad.getEstatus())

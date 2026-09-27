@@ -92,6 +92,7 @@ public class AuthServiceImpl implements AuthService {
         String refreshToken = refreshTokenService.crear(usuario, ip, userAgent);
 
         return LoginResponseDTO.builder()
+                .uuidUsuario(usuario.getUuidUsuario())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .debeActualizarPassword(usuario.getDebeActualizarPassword())

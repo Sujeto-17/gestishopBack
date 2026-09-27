@@ -14,6 +14,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * CRUD de trabajadores. Solo accesible por admin (el dueño del negocio da
@@ -40,26 +41,26 @@ public class TrabajadorController extends BaseController {
 
     @Operation(summary = "Actualizar datos de un trabajador", description = "Solo admin.")
     @PreAuthorize("hasRole('ADMIN')")
-    @PutMapping("/{idTrabajador}")
+    @PutMapping("/{uuidUsuario}")
     public ResponseEntity<ApiDataResponseDTO<TrabajadorResponseDTO>> actualizar(
-            @PathVariable Long idTrabajador, @Valid @RequestBody TrabajadorRequestDTO dto) {
-        return okActualizado(trabajadorService.actualizar(idTrabajador, dto));
+            @PathVariable UUID uuidUsuario, @Valid @RequestBody TrabajadorRequestDTO dto) {
+        return okActualizado(trabajadorService.actualizar(uuidUsuario, dto));
     }
 
     @Operation(summary = "Activar o desactivar el acceso de un trabajador", description = "Solo admin.")
     @PreAuthorize("hasRole('ADMIN')")
-    @PatchMapping("/{idTrabajador}/estatus")
+    @PatchMapping("/{uuidUsuario}/estatus")
     public ResponseEntity<ApiDataResponseDTO<TrabajadorResponseDTO>> cambiarEstatus(
-            @PathVariable Long idTrabajador) {
-        return okActualizado(trabajadorService.cambiarEstatus(idTrabajador));
+            @PathVariable UUID uuidUsuario) {
+        return okActualizado(trabajadorService.cambiarEstatus(uuidUsuario));
     }
 
     @Operation(summary = "Obtener un trabajador por su identificador", description = "Solo admin.")
     @PreAuthorize("hasRole('ADMIN')")
-    @GetMapping("/{idTrabajador}")
+    @GetMapping("/{uuidUsuario}")
     public ResponseEntity<ApiDataResponseDTO<TrabajadorResponseDTO>> obtener(
-            @PathVariable Long idTrabajador) {
-        return okEncontrado(trabajadorService.obtenerPorId(idTrabajador));
+            @PathVariable UUID uuidUsuario) {
+        return okEncontrado(trabajadorService.obtenerPorUuid(uuidUsuario));
     }
 
     @Operation(summary = "Listar trabajadores de un negocio", description = "Solo admin.")

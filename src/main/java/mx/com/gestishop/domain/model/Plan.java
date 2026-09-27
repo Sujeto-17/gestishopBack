@@ -32,9 +32,6 @@ public class Plan {
     @Column(name = "nombre", nullable = false, length = 50)
     private String nombre;
 
-    @Column(name = "sistema_type", nullable = false, length = 20)
-    private String sistemaType;  // servicio | tienda
-
     @Column(name = "precio", nullable = false, precision = 10, scale = 2)
     private BigDecimal precio;
 

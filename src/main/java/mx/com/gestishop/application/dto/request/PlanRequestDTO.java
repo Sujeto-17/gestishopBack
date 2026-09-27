@@ -15,12 +15,9 @@ import java.util.List;
 public class PlanRequestDTO {
 
     @NotBlank
+    @Pattern(regexp = "^(basico|pro|elite)$", message = "El nivel debe ser 'basico', 'pro' o 'elite'")
     @Schema(description = "Nivel del plan", example = "pro", allowableValues = {"basico", "pro", "elite"})
     private String nivel;
-
-    @NotBlank
-    @Schema(description = "Tipo de sistema al que aplica", example = "servicio", allowableValues = {"servicio", "tienda"})
-    private String sistemaType;
 
     @NotNull
     @DecimalMin(value = "0.0", inclusive = true)

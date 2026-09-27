@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Implementación del alta y gestión de trabajadores. Orquesta dos tablas
@@ -78,10 +79,10 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TrabajadorResponseDTO actualizar(Long idTrabajador, TrabajadorRequestDTO dto) {
+    public TrabajadorResponseDTO actualizar(UUID uuidUsuario, TrabajadorRequestDTO dto) {
         Trabajador entidad = RepositoryExecutor.execute(
-                () -> trabajadorRepository.buscarPorId(idTrabajador)
-                        .orElseThrow(() -> ErrorFactory.notFound("Trabajador", idTrabajador)),
+                () -> trabajadorRepository.buscarPorUuidUsuario(uuidUsuario)
+                        .orElseThrow(() -> ErrorFactory.notFound("Trabajador", uuidUsuario)),
                 "Trabajador", "actualizar"
         );
 
@@ -112,10 +113,10 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TrabajadorResponseDTO cambiarEstatus(Long idTrabajador) {
+    public TrabajadorResponseDTO cambiarEstatus(UUID uuidUsuario) {
         Trabajador entidad = RepositoryExecutor.execute(
-                () -> trabajadorRepository.buscarPorId(idTrabajador)
-                        .orElseThrow(() -> ErrorFactory.notFound("Trabajador", idTrabajador)),
+                () -> trabajadorRepository.buscarPorUuidUsuario(uuidUsuario)
+                        .orElseThrow(() -> ErrorFactory.notFound("Trabajador", uuidUsuario)),
                 "Trabajador", "cambiarEstatus"
         );
 
@@ -131,10 +132,10 @@ public class TrabajadorServiceImpl implements TrabajadorService {
     }
 
     @Override
-    public TrabajadorResponseDTO obtenerPorId(Long idTrabajador) {
+    public TrabajadorResponseDTO obtenerPorUuid(UUID uuidUsuario) {
         Trabajador entidad = RepositoryExecutor.execute(
-                () -> trabajadorRepository.buscarPorId(idTrabajador)
-                        .orElseThrow(() -> ErrorFactory.notFound("Trabajador", idTrabajador)),
+                () -> trabajadorRepository.buscarPorUuidUsuario(uuidUsuario)
+                        .orElseThrow(() -> ErrorFactory.notFound("Trabajador", uuidUsuario)),
                 "Trabajador", "consultar"
         );
         return TrabajadorMapper.toResponse(entidad);

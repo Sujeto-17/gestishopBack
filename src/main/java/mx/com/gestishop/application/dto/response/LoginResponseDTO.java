@@ -5,6 +5,7 @@ import lombok.Builder;
 import lombok.Getter;
 
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Respuesta del login: tokens de sesión + contexto necesario para que
@@ -15,6 +16,8 @@ import java.util.List;
 @Builder
 @Schema(name = "LoginResponseDTO", description = "Resultado de un login exitoso")
 public class LoginResponseDTO {
+
+    private UUID uuidUsuario;
 
     @Schema(description = "Token de acceso JWT de corta duración, se envía en cada request como Bearer")
     private String accessToken;

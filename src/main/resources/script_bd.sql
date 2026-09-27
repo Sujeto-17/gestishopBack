@@ -96,7 +96,6 @@ CREATE TABLE planes (
     uuid_plan       UUID NOT NULL DEFAULT gen_random_uuid(),  -- ID público para exponer en API/URLs
     nivel           VARCHAR(20)  NOT NULL CHECK (nivel IN ('basico','pro','elite')),
     nombre          VARCHAR(50)  NOT NULL,                     -- 'Básico', 'Pro', 'Elite'
-    sistema_type    VARCHAR(20)  NOT NULL CHECK (sistema_type IN ('servicio','tienda')),
     precio          NUMERIC(10,2) NOT NULL CHECK (precio >= 0),
     descripcion     VARCHAR(160) NOT NULL,
     estatus         VARCHAR(20)  NOT NULL DEFAULT 'activo'

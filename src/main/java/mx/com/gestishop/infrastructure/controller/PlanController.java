@@ -64,8 +64,7 @@ public class PlanController extends BaseController {
     @Operation(summary = "Listar planes activos por tipo de sistema",
             description = "Accesible por cualquier usuario autenticado; se usa al armar el selector de plan en el alta de un negocio.")
     @GetMapping("/activos")
-    public ResponseEntity<ApiDataResponseDTO<List<PlanResponseDTO>>> listarActivosPorSistema(
-            @RequestParam String sistemaType) {
-        return ok(planService.listarActivosPorSistema(sistemaType));
+    public ResponseEntity<ApiDataResponseDTO<List<PlanResponseDTO>>> listarActivos() {
+        return ok(planService.listarActivos());
     }
 }

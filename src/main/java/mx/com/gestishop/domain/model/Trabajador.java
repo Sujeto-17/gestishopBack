@@ -5,6 +5,8 @@ import lombok.*;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 @Entity
 @Table(name = "trabajadores")
@@ -57,4 +59,9 @@ public class Trabajador {
 
     @Column(name = "notas", length = 300)
     private String notas;
+
+    @PrePersist
+    protected void onCreate() {
+        if (fechaIngreso == null) fechaIngreso = LocalDate.now();
+    }
 }

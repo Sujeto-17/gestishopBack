@@ -7,6 +7,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 // Acceso a datos de la tabla trabajadores (extiende usuarios con datos laborales)
 public interface TrabajadorRepository extends JpaRepository<Trabajador, Long> {
@@ -23,13 +24,13 @@ public interface TrabajadorRepository extends JpaRepository<Trabajador, Long> {
         """)
     Optional<Trabajador> buscarPorUsuario(@Param("idUsuario") Long idUsuario);
 
-    // Busca un trabajador por el identificador interno de su registro laboral, con Usuario ya cargado
+    // Busca un trabajador por el identificador público (UUID) de su usuario asociado
     @Query("""
         SELECT t FROM Trabajador t
-        JOIN FETCH t.usuario
-        WHERE t.idTrabajador = :idTrabajador
+        JOIN FETCH t.usuario u
+        WHERE u.uuidUsuario = :uuidUsuario
         """)
-    Optional<Trabajador> buscarPorId(@Param("idTrabajador") Long idTrabajador);
+    Optional<Trabajador> buscarPorUuidUsuario(@Param("uuidUsuario") UUID uuidUsuario);
 
     /**
      * Lista todos los trabajadores activos de un negocio, con su Usuario ya cargado.

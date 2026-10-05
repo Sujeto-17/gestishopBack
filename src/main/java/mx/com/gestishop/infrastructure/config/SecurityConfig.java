@@ -43,6 +43,7 @@ public class SecurityConfig {
                         // Endpoints públicos
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        .requestMatchers("/api/v1/archivos/ver/**").permitAll()
                         // Solo superadmin
                         .requestMatchers("/api/v1/negocios/**", "/api/v1/planes/**", "/api/v1/admins/**").hasRole("SUPERADMIN")
                         // admin y trabajador gerente pueden ver productos/proveedores/categorias

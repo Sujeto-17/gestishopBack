@@ -6,7 +6,6 @@
 -- de la API, evitando exponer los IDs internos autoincrementales.
 CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
-
 -- ============================================================
 -- BLOQUE 1: CATÁLOGOS GENERALES DE PERSONA
 -- ============================================================
@@ -51,7 +50,6 @@ COMMENT ON TABLE cat_municipios IS
 
 CREATE INDEX ix_municipios_estado ON cat_municipios(id_estado);
 
-
 -- ============================================================
 -- BLOQUE 2: CATÁLOGOS DEL SISTEMA (giros y módulos)
 -- ============================================================
@@ -85,7 +83,6 @@ CREATE TABLE cat_modulos (
 );
 COMMENT ON TABLE cat_modulos IS
   'Catálogo de módulos funcionales, administrado por el superadmin en su propia pantalla CRUD. El desarrollo real del módulo (pantallas, endpoints) siempre requiere programación; esta tabla solo controla su disponibilidad en planes y permisos.';
-
 
 -- ============================================================
 -- BLOQUE 3: PLANES DE SUSCRIPCIÓN (catálogo global del superadmin)
@@ -175,7 +172,6 @@ COMMENT ON TABLE suscripciones IS
 
 CREATE INDEX ix_suscripciones_negocio ON suscripciones(id_negocio);
 
-
 -- ============================================================
 -- BLOQUE 6: USUARIOS (tabla central de identidad y acceso)
 -- ============================================================
@@ -220,7 +216,6 @@ CREATE UNIQUE INDEX ux_usuarios_uuid   ON usuarios(uuid_usuario);
 CREATE UNIQUE INDEX ux_usuarios_correo ON usuarios(correo) WHERE deleted_at IS NULL;
 CREATE INDEX ix_usuarios_tipo ON usuarios(tipo_usuario);
 
-
 -- ============================================================
 -- BLOQUE 7: ADMIN_NEGOCIO
 -- ============================================================
@@ -241,7 +236,6 @@ COMMENT ON TABLE admin_negocio IS
 
 CREATE INDEX ix_admin_negocio_negocio ON admin_negocio(id_negocio);
 CREATE INDEX ix_admin_negocio_usuario ON admin_negocio(id_usuario);
-
 
 -- ============================================================
 -- BLOQUE 8: TRABAJADORES
@@ -284,7 +278,6 @@ COMMENT ON TABLE trabajadores IS
 
 CREATE INDEX ix_trabajadores_negocio ON trabajadores(id_negocio);
 
-
 -- ============================================================
 -- BLOQUE 9: ROL_MODULOS (permisos data-driven)
 -- ============================================================
@@ -302,7 +295,6 @@ CREATE TABLE rol_modulos (
 );
 COMMENT ON TABLE rol_modulos IS
   'admin no necesita filas aquí: siempre ve todos los módulos de su plan sin restricción. Esta tabla solo restringe explícitamente a gerente/estandar.';
-
 
 -- ============================================================
 -- REFRESH TOKENS (sesiones activas, revocables)
@@ -338,6 +330,62 @@ COMMENT ON TABLE intentos_login IS
   'Bitácora de intentos de login (exitosos y fallidos) usada para bloqueo temporal por fuerza bruta.';
 
 CREATE INDEX ix_intentos_login_correo_fecha ON intentos_login(correo, created_at);
+
+-- ============================================================
+-- CATÁLOGO: a qué tipo de entidad pertenece un archivo
+-- ============================================================
+-- Abierto (no CHECK fijo) porque, como ya anticipaste, crecerá:
+-- hoy 'negocio', luego 'producto', 'trabajador', 'cliente', etc.
+CREATE TABLE cat_tipos_entidad_archivo (
+    id_tipo_entidad BIGSERIAL PRIMARY KEY,
+    clave           VARCHAR(30) NOT NULL UNIQUE,  -- 'negocio', 'producto', 'trabajador'...
+    nombre          VARCHAR(60) NOT NULL,          -- 'Negocios', 'Productos', 'Trabajadores'
+    estatus         VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estatus IN ('activo','inactivo'))
+);
+COMMENT ON TABLE cat_tipos_entidad_archivo IS
+  'Catálogo de módulos que pueden tener archivos adjuntos (negocio, producto, trabajador...). Se amplía insertando filas nuevas, sin migraciones.';
+
+  -- ============================================================
+  -- ARCHIVOS: tabla genérica para fotos/documentos de cualquier módulo
+  -- ============================================================
+  CREATE TABLE archivos (
+      id_archivo        BIGSERIAL PRIMARY KEY,
+      uuid_archivo      UUID NOT NULL DEFAULT gen_random_uuid(),
+
+      -- Relación polimórfica: a qué tipo de entidad y a qué fila específica pertenece.
+      -- NO es una FK real de Postgres (no puede apuntar a varias tablas distintas);
+      -- la integridad se controla desde el código del service.
+      id_tipo_entidad   BIGINT NOT NULL REFERENCES cat_tipos_entidad_archivo(id_tipo_entidad),
+      id_entidad        BIGINT NOT NULL,              -- ej. el id_negocio, id_producto, id_trabajador
+
+      -- Clasificación dentro de la misma entidad (una entidad puede tener varios "tipos" de archivo)
+      categoria         VARCHAR(30) NOT NULL,          -- 'logo', 'foto_producto', 'documento_curp', 'foto_perfil'...
+
+      -- Metadata del archivo físico (viene directo de StoredFileDTO)
+      nombre_archivo    VARCHAR(150) NOT NULL,          -- nombre generado (UUID + extensión)
+      nombre_original   VARCHAR(255),                   -- nombre con el que lo subió el usuario
+      content_type      VARCHAR(100),
+      tamanio_bytes     BIGINT,
+      ruta_relativa     VARCHAR(255) NOT NULL,          -- subcarpeta donde vive, ej. 'negocios/14'
+
+      -- Para entidades con varias fotos (producto, trabajador): cuál es la principal/portada
+      es_principal      BOOLEAN NOT NULL DEFAULT false,
+      orden             SMALLINT NOT NULL DEFAULT 0,
+
+      estatus           VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estatus IN ('activo','inactivo')),
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
+      deleted_at        TIMESTAMPTZ                      -- soft delete: el archivo físico se puede limpiar en batch después
+  );
+  COMMENT ON TABLE archivos IS
+    'Tabla genérica de archivos adjuntos (fotos, documentos) para cualquier módulo del sistema. id_tipo_entidad + id_entidad identifican a qué registro pertenece.';
+
+  CREATE INDEX ix_archivos_entidad ON archivos(id_tipo_entidad, id_entidad);
+  CREATE UNIQUE INDEX ux_archivos_uuid ON archivos(uuid_archivo);
+
+  -- Seed inicial
+  INSERT INTO cat_tipos_entidad_archivo (clave, nombre) VALUES
+    ('negocio', 'Negocios');
+    -- más adelante: ('producto', 'Productos'), ('trabajador', 'Trabajadores'), ...
 
 -- ============================================================
 -- SEED (datos iniciales de referencia)

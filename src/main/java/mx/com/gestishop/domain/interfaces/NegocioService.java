@@ -2,6 +2,7 @@ package mx.com.gestishop.domain.interfaces;
 
 import mx.com.gestishop.application.dto.request.NegocioRequestDTO;
 import mx.com.gestishop.application.dto.response.NegocioResponseDTO;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -19,4 +20,6 @@ public interface NegocioService {
     NegocioResponseDTO obtenerPorUuid(UUID uuidNegocio);
 
     List<NegocioResponseDTO> listarActivos();
+
+    NegocioResponseDTO subirLogo(UUID uuidNegocio, MultipartFile archivo);
 }

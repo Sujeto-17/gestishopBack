@@ -42,7 +42,6 @@ public class NegocioMapper {
                 .idNegocio(entidad.getIdNegocio())
                 .uuidNegocio(entidad.getUuidNegocio())
                 .nombre(entidad.getNombre())
-                .logoUrl(entidad.getLogoUrl())
                 .sistemaType(entidad.getSistemaType())
                 .giro(mapearGiro(entidad.getGiro()))
                 .correo(entidad.getCorreo())
@@ -52,6 +51,7 @@ public class NegocioMapper {
                 .estatus(entidad.getEstatus())
                 .fechaAlta(entidad.getFechaAlta())
                 .vencimiento(entidad.getVencimiento())
+                .logoUrl(construirUrlPublica(entidad.getLogoUrl()))
                 .build();
     }
 
@@ -67,5 +67,11 @@ public class NegocioMapper {
                 .id(plan.getIdPlan().intValue())
                 .nombre(plan.getNombre())
                 .build();
+    }
+
+    // Convierte una ruta relativa guardada en BD a una URL pública completa y servible
+    private static String construirUrlPublica(String rutaRelativa) {
+        if (rutaRelativa == null || rutaRelativa.isBlank()) return null;
+        return "/api/v1/archivos/ver/" + rutaRelativa;
     }
 }

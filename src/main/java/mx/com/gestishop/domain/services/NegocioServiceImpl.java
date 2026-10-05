@@ -2,12 +2,14 @@ package mx.com.gestishop.domain.services;
 
 import lombok.RequiredArgsConstructor;
 import mx.com.gestishop.application.dto.request.NegocioRequestDTO;
+import mx.com.gestishop.application.dto.response.ArchivoResponseDTO;
 import mx.com.gestishop.application.dto.response.NegocioResponseDTO;
 import mx.com.gestishop.application.mapper.NegocioMapper;
 import mx.com.gestishop.core.enums.ApiCodeResponse;
 import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.exception.RepositoryExecutor;
 import mx.com.gestishop.core.generic.ErrorFactory;
+import mx.com.gestishop.domain.interfaces.ArchivoService;
 import mx.com.gestishop.domain.interfaces.NegocioService;
 import mx.com.gestishop.domain.interfaces.SuscripcionService;
 import mx.com.gestishop.domain.model.CatGiroNegocio;
@@ -18,9 +20,11 @@ import mx.com.gestishop.domain.repository.NegocioRepository;
 import mx.com.gestishop.domain.repository.PlanRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -38,6 +42,10 @@ public class NegocioServiceImpl implements NegocioService {
     private final PlanRepository planRepository;
 
     private final SuscripcionService suscripcionService;
+    private final ArchivoService archivoService;
+
+    private static final Set<String> TIPOS_LOGO_PERMITIDOS =
+            Set.of("image/jpeg", "image/png", "image/webp");
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -136,5 +144,35 @@ public class NegocioServiceImpl implements NegocioService {
     public List<NegocioResponseDTO> listarActivos() {
         return RepositoryExecutor.execute(negocioRepository::listarActivos, "Negocio", "listarActivos")
                 .stream().map(NegocioMapper::toResponse).toList();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public NegocioResponseDTO subirLogo(UUID uuidNegocio, MultipartFile archivo) {
+
+        validarTipoLogo(archivo);
+
+        Negocio negocio = RepositoryExecutor.execute(
+                () -> negocioRepository.buscarPorUuid(uuidNegocio)
+                        .orElseThrow(() -> ErrorFactory.notFound("Negocio", uuidNegocio)),
+                "Negocio", "subirLogo"
+        );
+
+        ArchivoResponseDTO archivoGuardado = archivoService.subir(
+                "negocio", negocio.getIdNegocio(), "logo", archivo, true);
+
+        // Se actualiza el puntero rápido del negocio al nuevo logo vigente
+        negocio.setLogoUrl(archivoGuardado.getRutaRelativa());
+        RepositoryExecutor.executeVoid(() -> negocioRepository.save(negocio), "Negocio", "subirLogo");
+
+        return NegocioMapper.toResponse(negocio);
+    }
+
+    private void validarTipoLogo(MultipartFile archivo) {
+        String contentType = archivo.getContentType();
+        if (contentType == null || !TIPOS_LOGO_PERMITIDOS.contains(contentType)) {
+            throw new ApiResponseException(ApiCodeResponse.CONFLICT,
+                    Map.of("detalle", "El logo debe ser una imagen JPG, PNG o WEBP."));
+        }
     }
 }

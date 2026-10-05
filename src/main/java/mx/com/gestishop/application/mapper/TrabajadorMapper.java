@@ -1,5 +1,6 @@
 package mx.com.gestishop.application.mapper;
 
+import mx.com.gestishop.application.dto.request.TrabajadorActualizarRequestDTO;
 import mx.com.gestishop.application.dto.request.TrabajadorRequestDTO;
 import mx.com.gestishop.application.dto.response.TrabajadorResponseDTO;
 import mx.com.gestishop.domain.model.Negocio;
@@ -22,6 +23,8 @@ public class TrabajadorMapper {
                 .nombre(dto.getNombre())
                 .correo(dto.getCorreo())
                 .telefono(dto.getTelefono())
+                .fechaNacimiento(dto.getFechaNacimiento())
+                .direccion(dto.getDireccion())
                 .passwordHash(passwordHash)
                 .debeActualizarPassword(true)  // toda cuenta nueva fuerza cambio de contraseña
                 .estatus("activo")
@@ -55,6 +58,8 @@ public class TrabajadorMapper {
                 .nombre(usuario.getNombre())
                 .correo(usuario.getCorreo())
                 .telefono(usuario.getTelefono())
+                .fechaNacimiento(trabajador.getFechaNacimiento())
+                .direccion(trabajador.getDireccion())
                 .puesto(trabajador.getPuesto())
                 .rol(trabajador.getRol())
                 .nivelAcceso(trabajador.getNivelAcceso())
@@ -68,5 +73,22 @@ public class TrabajadorMapper {
                 .fechaIngreso(trabajador.getFechaIngreso())
                 .idNegocio(trabajador.getNegocio().getIdNegocio())
                 .build();
+    }
+
+    public static void actualizarEntidad(Trabajador entidad, Usuario usuario, TrabajadorActualizarRequestDTO dto) {
+        usuario.setNombre(dto.getNombre());
+        usuario.setTelefono(dto.getTelefono());
+
+        entidad.setPuesto(dto.getPuesto());
+        entidad.setRol(dto.getRol());
+        entidad.setNivelAcceso(dto.getNivelAcceso());
+        entidad.setTurno(dto.getTurno());
+        entidad.setTipoContrato(dto.getTipoContrato());
+        entidad.setSalario(dto.getSalario());
+        entidad.setCurp(dto.getCurp());
+        entidad.setNss(dto.getNss());
+        entidad.setNotas(dto.getNotas());
+        entidad.setFechaNacimiento(dto.getFechaNacimiento());
+        entidad.setDireccion(dto.getDireccion());
     }
 }

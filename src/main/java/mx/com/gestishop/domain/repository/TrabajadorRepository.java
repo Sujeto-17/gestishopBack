@@ -32,10 +32,7 @@ public interface TrabajadorRepository extends JpaRepository<Trabajador, Long> {
         """)
     Optional<Trabajador> buscarPorUuidUsuario(@Param("uuidUsuario") UUID uuidUsuario);
 
-    /**
-     * Lista todos los trabajadores activos de un negocio, con su Usuario ya cargado.
-     * Se usa en el panel del admin para ver su plantilla de personal.
-     */
+    // Lista todos los trabajadores activos de un negocio, con su Usuario ya cargado
     @Query("""
         SELECT t FROM Trabajador t
         JOIN FETCH t.usuario u

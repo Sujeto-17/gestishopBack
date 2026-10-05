@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import mx.com.gestishop.application.dto.request.TrabajadorActualizarRequestDTO;
 import mx.com.gestishop.application.dto.request.TrabajadorRequestDTO;
 import mx.com.gestishop.application.dto.response.TrabajadorResponseDTO;
 import mx.com.gestishop.core.dto.ApiDataResponseDTO;
@@ -14,6 +15,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -43,7 +45,7 @@ public class TrabajadorController extends BaseController {
     @PreAuthorize("hasRole('ADMIN')")
     @PutMapping("/{uuidUsuario}")
     public ResponseEntity<ApiDataResponseDTO<TrabajadorResponseDTO>> actualizar(
-            @PathVariable UUID uuidUsuario, @Valid @RequestBody TrabajadorRequestDTO dto) {
+            @PathVariable UUID uuidUsuario, @Valid @RequestBody TrabajadorActualizarRequestDTO dto) {
         return okActualizado(trabajadorService.actualizar(uuidUsuario, dto));
     }
 
@@ -69,5 +71,15 @@ public class TrabajadorController extends BaseController {
     public ResponseEntity<ApiDataResponseDTO<List<TrabajadorResponseDTO>>> listarPorNegocio(
             @RequestParam Long idNegocio) {
         return ok(trabajadorService.listarPorNegocio(idNegocio));
+    }
+
+    @Operation(summary = "Restablecer la contraseña de un trabajador",
+            description = "Genera una contraseña temporal aleatoria y la devuelve en texto plano UNA sola vez.")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/{uuidUsuario}/restablecer-password")
+    public ResponseEntity<ApiDataResponseDTO<Map<String, String>>> restablecerPassword(
+            @PathVariable UUID uuidUsuario) {
+        String passwordTemporal = trabajadorService.restablecerPassword(uuidUsuario);
+        return ok(Map.of("passwordTemporal", passwordTemporal));
     }
 }

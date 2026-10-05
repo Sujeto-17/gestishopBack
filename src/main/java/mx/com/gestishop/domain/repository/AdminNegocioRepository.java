@@ -7,8 +7,9 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
-// Acceso a datos de la tabla admin_negocio (relación N admins ↔ 1 negocio).
+// Acceso a datos de la tabla admin_negocio (relación N:M entre admins y negocios)
 public interface AdminNegocioRepository extends JpaRepository<AdminNegocio, Long> {
 
     /**
@@ -51,4 +52,29 @@ public interface AdminNegocioRepository extends JpaRepository<AdminNegocio, Long
               AND an.negocio.idNegocio = :idNegocio
             """)
     boolean existeRelacion(@Param("idUsuario") Long idUsuario, @Param("idNegocio") Long idNegocio);
+
+    /**
+     * Trae el primer negocio asignado a un usuario admin, identificado por su UUID
+     * público (en vez de id interno), con Usuario y Negocio ya cargados (JOIN FETCH)
+     * para evitar consultas extra al construir la respuesta de un solo admin.
+     */
+    @Query("""
+        SELECT an FROM AdminNegocio an
+        JOIN FETCH an.usuario u
+        JOIN FETCH an.negocio n
+        WHERE u.uuidUsuario = :uuidUsuario
+        ORDER BY an.createdAt ASC
+        LIMIT 1
+        """)
+    Optional<AdminNegocio> buscarPorUuidUsuario(@Param("uuidUsuario") UUID uuidUsuario);
+
+    // Lista TODOS los admins activos del sistema, cada uno con su negocio ya cargado
+    @Query("""
+        SELECT an FROM AdminNegocio an
+        JOIN FETCH an.usuario u
+        JOIN FETCH an.negocio n
+        WHERE u.deletedAt IS NULL
+        ORDER BY u.nombre ASC
+        """)
+    List<AdminNegocio> listarTodos();
 }

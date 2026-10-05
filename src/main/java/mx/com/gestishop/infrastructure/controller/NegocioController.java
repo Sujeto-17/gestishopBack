@@ -9,9 +9,11 @@ import mx.com.gestishop.application.dto.response.NegocioResponseDTO;
 import mx.com.gestishop.core.dto.ApiDataResponseDTO;
 import mx.com.gestishop.core.generic.BaseController;
 import mx.com.gestishop.domain.interfaces.NegocioService;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 import java.util.UUID;
@@ -60,5 +62,15 @@ public class NegocioController extends BaseController {
     @GetMapping
     public ResponseEntity<ApiDataResponseDTO<List<NegocioResponseDTO>>> listarActivos() {
         return ok(negocioService.listarActivos());
+    }
+
+    @Operation(summary = "Subir el logo de un negocio",
+            description = "Reemplaza el logo actual. Se comprime automáticamente si pesa más de 2MB.")
+    @PreAuthorize("hasRole('SUPERADMIN')")
+    @PostMapping(value = "/{uuidNegocio}/logo", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<ApiDataResponseDTO<NegocioResponseDTO>> subirLogo(
+            @PathVariable UUID uuidNegocio,
+            @RequestParam("archivo") MultipartFile archivo) {
+        return okActualizado(negocioService.subirLogo(uuidNegocio, archivo));
     }
 }

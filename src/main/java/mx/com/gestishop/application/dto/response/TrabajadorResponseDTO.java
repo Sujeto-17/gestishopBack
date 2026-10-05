@@ -29,6 +29,12 @@ public class TrabajadorResponseDTO {
     @Schema(example = "9931000040", nullable = true)
     private String telefono;
 
+    @Schema(nullable = true)
+    private LocalDate fechaNacimiento;
+
+    @Schema(nullable = true)
+    private String direccion;
+
     @Schema(example = "Operador de sublimación")
     private String puesto;
 

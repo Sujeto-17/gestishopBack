@@ -1,6 +1,7 @@
 package mx.com.gestishop.domain.services;
 
 import lombok.RequiredArgsConstructor;
+import mx.com.gestishop.application.dto.request.TrabajadorActualizarRequestDTO;
 import mx.com.gestishop.application.dto.request.TrabajadorRequestDTO;
 import mx.com.gestishop.application.dto.response.TrabajadorResponseDTO;
 import mx.com.gestishop.application.mapper.TrabajadorMapper;
@@ -8,6 +9,7 @@ import mx.com.gestishop.core.enums.ApiCodeResponse;
 import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.exception.RepositoryExecutor;
 import mx.com.gestishop.core.generic.ErrorFactory;
+import mx.com.gestishop.domain.interfaces.RefreshTokenService;
 import mx.com.gestishop.domain.interfaces.TrabajadorService;
 import mx.com.gestishop.domain.model.Negocio;
 import mx.com.gestishop.domain.model.Trabajador;
@@ -15,6 +17,7 @@ import mx.com.gestishop.domain.model.Usuario;
 import mx.com.gestishop.domain.repository.NegocioRepository;
 import mx.com.gestishop.domain.repository.TrabajadorRepository;
 import mx.com.gestishop.domain.repository.UsuarioRepository;
+import mx.com.gestishop.infrastructure.utils.PasswordGeneratorUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +39,8 @@ public class TrabajadorServiceImpl implements TrabajadorService {
     private final UsuarioRepository usuarioRepository;
     private final NegocioRepository negocioRepository;
     private final PasswordEncoder passwordEncoder;
+
+    private final RefreshTokenService refreshTokenService;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -79,7 +84,7 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TrabajadorResponseDTO actualizar(UUID uuidUsuario, TrabajadorRequestDTO dto) {
+    public TrabajadorResponseDTO actualizar(UUID uuidUsuario, TrabajadorActualizarRequestDTO dto) {
         Trabajador entidad = RepositoryExecutor.execute(
                 () -> trabajadorRepository.buscarPorUuidUsuario(uuidUsuario)
                         .orElseThrow(() -> ErrorFactory.notFound("Trabajador", uuidUsuario)),
@@ -89,20 +94,8 @@ public class TrabajadorServiceImpl implements TrabajadorService {
         // Datos de acceso (nombre/teléfono se pueden editar; correo y password NO se tocan aquí
         // — el cambio de correo o password requiere flujos propios por seguridad)
         Usuario usuario = entidad.getUsuario();
-        usuario.setNombre(dto.getNombre());
-        usuario.setTelefono(dto.getTelefono());
+        TrabajadorMapper.actualizarEntidad(entidad, usuario, dto);
         RepositoryExecutor.executeVoid(() -> usuarioRepository.save(usuario), "Usuario", "actualizar");
-
-        // Datos laborales
-        entidad.setPuesto(dto.getPuesto());
-        entidad.setRol(dto.getRol());
-        entidad.setNivelAcceso(dto.getNivelAcceso());
-        entidad.setTurno(dto.getTurno());
-        entidad.setTipoContrato(dto.getTipoContrato());
-        entidad.setSalario(dto.getSalario());
-        entidad.setCurp(dto.getCurp());
-        entidad.setNss(dto.getNss());
-        entidad.setNotas(dto.getNotas());
 
         Trabajador actualizado = RepositoryExecutor.execute(
                 () -> trabajadorRepository.save(entidad), "Trabajador", "actualizar");
@@ -146,5 +139,26 @@ public class TrabajadorServiceImpl implements TrabajadorService {
         return RepositoryExecutor.execute(
                         () -> trabajadorRepository.listarPorNegocio(idNegocio), "Trabajador", "listarPorNegocio")
                 .stream().map(TrabajadorMapper::toResponse).toList();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public String restablecerPassword(UUID uuidUsuario) {
+        Trabajador entidad = RepositoryExecutor.execute(
+                () -> trabajadorRepository.buscarPorUuidUsuario(uuidUsuario)
+                        .orElseThrow(() -> ErrorFactory.notFound("Trabajador", uuidUsuario)),
+                "Trabajador", "restablecerPassword"
+        );
+
+        Usuario usuario = entidad.getUsuario();
+        String passwordTemporal = PasswordGeneratorUtil.generar();
+
+        usuario.setPasswordHash(passwordEncoder.encode(passwordTemporal));
+        usuario.setDebeActualizarPassword(true);
+
+        RepositoryExecutor.executeVoid(() -> usuarioRepository.save(usuario), "Usuario", "restablecerPassword");
+        refreshTokenService.revocarTodasDelUsuario(usuario.getIdUsuario());
+
+        return passwordTemporal;
     }
 }

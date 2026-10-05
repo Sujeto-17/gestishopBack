@@ -11,6 +11,6 @@ import org.springframework.stereotype.Component;
 @ConfigurationProperties(prefix = "media")
 public class StorageProperties {
 
-    private String location;
+    private String uploadDir;
 
 }

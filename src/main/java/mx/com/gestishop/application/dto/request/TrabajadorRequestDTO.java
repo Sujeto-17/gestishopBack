@@ -6,8 +6,9 @@ import lombok.Getter;
 import lombok.Setter;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 
-//Datos completos para dar de alta un trabajador: identidad de acceso (correo, password) + datos laborales
+// Datos completos para dar de alta un trabajador: identidad de acceso (correo, password) + datos laborales
 @Getter
 @Setter
 @Schema(name = "TrabajadorRequestDTO", description = "Alta completa de un trabajador (acceso + datos laborales)")
@@ -27,6 +28,13 @@ public class TrabajadorRequestDTO {
     @Pattern(regexp = "^\\d{10}$", message = "El teléfono debe tener 10 dígitos")
     @Schema(example = "9931000040", nullable = true)
     private String telefono;
+
+    @Schema(nullable = true)
+    private LocalDate fechaNacimiento;
+
+    @Size(max = 200)
+    @Schema(nullable = true)
+    private String direccion;
 
     @NotBlank @Size(min = 8)
     @Schema(description = "Contraseña generada por el sistema, se encripta antes de guardar", example = "Xk9#mPz2")

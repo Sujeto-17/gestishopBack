@@ -52,4 +52,37 @@ public class NegocioResponseDTO {
 
     @Schema(description = "Fecha de vencimiento del plan/prueba actual")
     private LocalDate vencimiento;
+
+    @Schema(description = "Municipio donde se ubica el negocio", nullable = true)
+    private CatalogoRefDTO municipio;
+
+    @Schema(description = "Razón social", nullable = true)
+    private String razonSocial;
+
+    @Schema(description = "RFC", nullable = true)
+    private String rfc;
+
+    @Schema(description = "Clave del régimen fiscal (SAT)", nullable = true)
+    private String regimenFiscal;
+
+    @Schema(description = "Código postal fiscal", nullable = true)
+    private String codigoPostalFiscal;
+
+    @Schema(description = "Correo de facturación", nullable = true)
+    private String correoFacturacion;
+
+    @Schema(description = "Notas internas del superadmin", nullable = true)
+    private String notasInternas;
+
+    @Schema(description = "Administradores ACTIVOS del negocio. 0 = negocio sin administrador (hay que asignarle uno)")
+    private Long administradores;
+
+    @Schema(description = "Trabajadores ACTIVOS del negocio")
+    private Long trabajadores;
+
+    @Schema(description = "Límite de administradores de su plan; null = sin límite", nullable = true)
+    private Integer limiteAdministradores;
+
+    @Schema(description = "Límite de trabajadores de su plan; null = sin límite", nullable = true)
+    private Integer limiteTrabajadores;
 }

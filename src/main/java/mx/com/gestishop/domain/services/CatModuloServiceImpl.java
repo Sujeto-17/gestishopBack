@@ -35,8 +35,19 @@ public class CatModuloServiceImpl implements CatModuloService {
                     Map.of("detalle", "Ya existe un módulo registrado con ese nombre."));
         }
 
+        // La clave viene en el DTO o se genera del nombre; debe ser única porque es lo que usa el código
+        CatModulo nuevo = CatModuloMapper.toEntity(dto);
+
+        boolean claveExiste = RepositoryExecutor.execute(
+                () -> catModuloRepository.existeClave(nuevo.getClave()), "CatModulo", "validarClave");
+
+        if (claveExiste) {
+            throw new ApiResponseException(ApiCodeResponse.CONFLICT,
+                    Map.of("detalle", "Ya existe un módulo con la clave «" + nuevo.getClave() + "». Indica otra clave."));
+        }
+
         CatModulo guardado = RepositoryExecutor.execute(
-                () -> catModuloRepository.save(CatModuloMapper.toEntity(dto)), "CatModulo", "crear");
+                () -> catModuloRepository.save(nuevo), "CatModulo", "crear");
 
         return CatModuloMapper.toResponse(guardado);
     }
@@ -48,6 +59,15 @@ public class CatModuloServiceImpl implements CatModuloService {
                 () -> catModuloRepository.findById(idModulo).orElseThrow(() -> ErrorFactory.notFound("CatModulo", idModulo)),
                 "CatModulo", "actualizar"
         );
+
+        // Al renombrar, el nuevo nombre no debe estar en uso por otro módulo (la clave NO cambia)
+        boolean nombreEnUso = RepositoryExecutor.execute(
+                () -> catModuloRepository.existeNombreEnOtro(idModulo, dto.getNombre()), "CatModulo", "validarNombre");
+
+        if (nombreEnUso) {
+            throw new ApiResponseException(ApiCodeResponse.CONFLICT,
+                    Map.of("detalle", "Ya existe otro módulo con ese nombre."));
+        }
 
         CatModuloMapper.actualizarEntidad(entidad, dto);
 

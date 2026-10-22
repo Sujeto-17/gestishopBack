@@ -1,6 +1,7 @@
 package mx.com.gestishop.domain.interfaces;
 
 import mx.com.gestishop.application.dto.response.AdminResponseDTO;
+import mx.com.gestishop.core.dto.CatalogoRefDTO;
 
 import java.util.List;
 import java.util.UUID;
@@ -25,4 +26,19 @@ public interface AdminService {
      *         (no queda registrada en ningún lado después de esta respuesta).
      */
     String restablecerPassword(UUID uuidUsuario);
+
+    // Negocios a los que está asignado un administrador (un dueño puede tener varios)
+    List<CatalogoRefDTO> listarNegocios(UUID uuidUsuario);
+
+    /**
+     * Asigna un administrador que YA existe a otro negocio (dueño con varias sucursales), sin crearle
+     * otra cuenta. Desde ese momento verá un selector de negocio al iniciar sesión.
+     */
+    AdminResponseDTO vincularNegocio(UUID uuidUsuario, Long idNegocio);
+
+    /**
+     * Quita a un administrador de un negocio. No se permite si es su único negocio (para eso se
+     * desactiva la cuenta) ni si es el único administrador activo de ese negocio.
+     */
+    void desvincularNegocio(UUID uuidUsuario, Long idNegocio);
 }

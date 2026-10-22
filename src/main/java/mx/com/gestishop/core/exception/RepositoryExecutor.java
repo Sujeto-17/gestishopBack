@@ -56,6 +56,16 @@ public class RepositoryExecutor {
             String operacion
     ) {
         /*
+         * Si ya es una excepción de negocio (por ejemplo un notFound() o un conflicto lanzado
+         * dentro del lambda de execute()), se deja pasar tal cual.
+         * Antes TODA ApiResponseException lanzada aquí adentro terminaba convertida en un
+         * 500 "Error interno", y se perdían el código HTTP correcto y el detalle del mensaje.
+         */
+        if (ex instanceof ApiResponseException api) {
+            return api;
+        }
+
+        /*
          * Primero revisar si proviene de PostgreSQL
          */
         PSQLException psql = findPSQLException(ex);

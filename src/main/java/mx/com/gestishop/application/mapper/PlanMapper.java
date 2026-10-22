@@ -34,6 +34,8 @@ public class PlanMapper {
                 .nombre(nombreDesdeNivel(dto.getNivel()))
                 .precio(dto.getPrecio())
                 .descripcion(dto.getDescripcion())
+                .maxTrabajadores(dto.getMaxTrabajadores())
+                .maxAdministradores(dto.getMaxAdministradores())
                 .estatus("activo")
                 .build();
     }
@@ -43,6 +45,8 @@ public class PlanMapper {
         entidad.setNombre(nombreDesdeNivel(dto.getNivel()));
         entidad.setPrecio(dto.getPrecio());
         entidad.setDescripcion(dto.getDescripcion());
+        entidad.setMaxTrabajadores(dto.getMaxTrabajadores());
+        entidad.setMaxAdministradores(dto.getMaxAdministradores());
     }
 
     public static PlanResponseDTO toResponse(Plan entidad) {
@@ -53,6 +57,8 @@ public class PlanMapper {
                 .nombre(entidad.getNombre())
                 .precio(entidad.getPrecio())
                 .descripcion(entidad.getDescripcion())
+                .maxTrabajadores(entidad.getMaxTrabajadores())
+                .maxAdministradores(entidad.getMaxAdministradores())
                 .estatus(entidad.getEstatus())
                 .modulos(mapearModulos(entidad.getModulos()))
                 .build();
@@ -62,3 +68,4 @@ public class PlanMapper {
         return modulos.stream().map(CatModuloMapper::toResponse).toList();
     }
 }
+

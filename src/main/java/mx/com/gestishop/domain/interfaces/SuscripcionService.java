@@ -1,5 +1,6 @@
 package mx.com.gestishop.domain.interfaces;
 
+import mx.com.gestishop.application.dto.request.CancelarPeriodoRequestDTO;
 import mx.com.gestishop.application.dto.request.SuscripcionRequestDTO;
 import mx.com.gestishop.application.dto.response.SuscripcionResponseDTO;
 import mx.com.gestishop.domain.model.Negocio;
@@ -8,27 +9,38 @@ import mx.com.gestishop.domain.model.Suscripcion;
 
 import java.util.List;
 
-// Contrato de gestión del historial de suscripciones (pagos) de los negocios.
+/**
+ * Contrato de la gestión de suscripciones (periodos y pagos de cada negocio).
+ * <p>
+ * Un periodo solo puede estar en uno de tres estados:
+ *  - prueba:    los primeros 15 días de un negocio nuevo (precio 0)
+ *  - pagada:    30 días ya cobrados
+ *  - cancelada: un periodo pagado que se registró por error (no da acceso)
+ */
 public interface SuscripcionService {
 
-    /**
-     * Crea el primer periodo de un negocio recién dado de alta (estatus 'pendiente').
-     * Se llama desde NegocioServiceImpl al momento de crear un negocio, dentro de
-     * la misma transacción, para que ambas filas se creen juntas o ninguna lo haga.
-     */
+    // Crea el periodo de prueba de un negocio recién registrado (se llama desde NegocioService.crear)
     Suscripcion crearPeriodoInicial(Negocio negocio, Plan plan);
 
-    // Marca un periodo como pagado, registrando fecha y metodo de pago
-    SuscripcionResponseDTO confirmarPago(Long idSuscripcion, SuscripcionRequestDTO dto);
+    /**
+     * Acción principal del superadmin cuando un cliente paga: crea el periodo de 30 días ya pagado,
+     * deja el negocio 'activo' y mueve su vencimiento al fin de ese periodo.
+     * Si todavía le quedaban días, el nuevo periodo empieza donde termina el actual.
+     */
+    SuscripcionResponseDTO registrarPago(Long idNegocio, SuscripcionRequestDTO dto);
 
     /**
-     * Genera el siguiente periodo de un negocio (30 días desde hoy o desde el
-     * vencimiento anterior, lo que sea más tarde, para no perder días ya pagados).
+     * Cancela un periodo pagado (por ejemplo, registrado en el negocio equivocado) y recalcula el acceso
+     * del negocio con los periodos que quedan. Un negocio suspendido a mano no se reactiva por cancelar.
      */
-    SuscripcionResponseDTO renovar(Long idNegocio);
+    SuscripcionResponseDTO cancelarPeriodo(Long idSuscripcion, CancelarPeriodoRequestDTO dto);
 
+    // Historial de un negocio, del periodo más reciente al más antiguo
     List<SuscripcionResponseDTO> listarPorNegocio(Long idNegocio);
 
-    // Lista negocios con periodos vencidos que nunca se pagaron (morosos)
-    List<SuscripcionResponseDTO> listarVencidasPendientes();
+    /**
+     * Proceso que corre cada noche (y al arrancar): pasa a 'inactivo' los negocios cuyo periodo terminó.
+     * Devuelve cuántos negocios desactivó.
+     */
+    int procesarVencimientos();
 }

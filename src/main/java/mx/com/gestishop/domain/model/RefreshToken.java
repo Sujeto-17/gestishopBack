@@ -28,6 +28,11 @@ public class RefreshToken {
     @Column(name = "user_agent", length = 255)
     private String userAgent;
 
+    // Negocio que el ADMIN tenía seleccionado en esta sesión (null para los demás tipos de usuario).
+    // Se conserva al renovar el token, para que "cambiar de negocio" no se pierda cada 15 minutos.
+    @Column(name = "id_negocio_activo")
+    private Long idNegocioActivo;
+
     @Column(name = "fecha_expiracion", nullable = false)
     private OffsetDateTime fechaExpiracion;
 

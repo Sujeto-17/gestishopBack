@@ -11,17 +11,17 @@ import java.util.UUID;
 public interface TrabajadorService {
 
     // Da de alta un trabajador: crea su Usuario y su registro laboral en una sola transacción
-    TrabajadorResponseDTO crear(TrabajadorRequestDTO dto);
+    TrabajadorResponseDTO crear(TrabajadorRequestDTO dto, Long idNegocio);
 
-    TrabajadorResponseDTO actualizar(UUID uuidUsuario, TrabajadorActualizarRequestDTO dto);
+    TrabajadorResponseDTO actualizar(UUID uuidUsuario, TrabajadorActualizarRequestDTO dto, Long idNegocio);
 
     // Activa/desactiva la cuenta de acceso del trabajador (afecta la tabla usuarios, no trabajadores)
-    TrabajadorResponseDTO cambiarEstatus(UUID uuidUsuario);
+    TrabajadorResponseDTO cambiarEstatus(UUID uuidUsuario, Long idNegocio);
 
-    TrabajadorResponseDTO obtenerPorUuid(UUID uuidUsuario);
+    TrabajadorResponseDTO obtenerPorUuid(UUID uuidUsuario, Long idNegocio);
 
     List<TrabajadorResponseDTO> listarPorNegocio(Long idNegocio);
 
     // Genera una contraseña temporal, la asigna y fuerza el cambio en el próximo login
-    String restablecerPassword(UUID uuidUsuario);
+    String restablecerPassword(UUID uuidUsuario, Long idNegocio);
 }

@@ -71,6 +71,9 @@ COMMENT ON TABLE cat_giros_negocio IS
 -- aquí la hace SELECCIONABLE en planes y permisos, pero no la crea por sí sola.
 CREATE TABLE cat_modulos (
     id_modulo   BIGSERIAL PRIMARY KEY,
+    clave       VARCHAR(40) NOT NULL
+                CONSTRAINT uq_cat_modulos_clave UNIQUE
+                CONSTRAINT ck_cat_modulos_clave CHECK (clave ~ '^[a-z][a-z0-9_]{1,39}$'),  -- identificador ESTABLE que usa el código (token, guards, permisos); el nombre se puede editar, la clave NO
     nombre      VARCHAR(60) NOT NULL UNIQUE,       -- 'Dashboard', 'Pedidos', 'Ventas'...
     descripcion VARCHAR(150),
     icono       VARCHAR(30),                       -- ícono FA para el sidebar
@@ -95,6 +98,9 @@ CREATE TABLE planes (
     nombre          VARCHAR(50)  NOT NULL,                     -- 'Básico', 'Pro', 'Elite'
     precio          NUMERIC(10,2) NOT NULL CHECK (precio >= 0),
     descripcion     VARCHAR(160) NOT NULL,
+    -- Límites del plan (NULL = sin límite). Se validan al registrar trabajadores y administradores del negocio
+    max_trabajadores    INTEGER CONSTRAINT ck_planes_max_trabajadores    CHECK (max_trabajadores IS NULL OR max_trabajadores > 0),
+    max_administradores INTEGER CONSTRAINT ck_planes_max_administradores CHECK (max_administradores IS NULL OR max_administradores > 0),
     estatus         VARCHAR(20)  NOT NULL DEFAULT 'activo'
                     CHECK (estatus IN ('activo','inactivo')),
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
@@ -129,6 +135,14 @@ CREATE TABLE negocios (
     correo          VARCHAR(150) NOT NULL,
     telefono        VARCHAR(15),
     direccion       VARCHAR(200),
+    id_municipio    BIGINT       REFERENCES cat_municipios(id_municipio),  -- dónde se ubica (obligatorio al registrar; NULL solo en negocios anteriores)
+    -- Datos de facturación: opcionales, pero van los 4 primeros completos o ninguno
+    razon_social         VARCHAR(150),
+    rfc                  VARCHAR(13),
+    regimen_fiscal       VARCHAR(3),     -- clave SAT de 3 dígitos (601, 612, 626...)
+    codigo_postal_fiscal VARCHAR(5),
+    correo_facturacion   VARCHAR(150),
+    notas_internas       VARCHAR(300),   -- privadas del superadmin, el negocio nunca las ve
     id_plan         BIGINT       NOT NULL REFERENCES planes(id_plan),  -- plan ACTUAL vigente (denormalizado para lectura rápida)
     estatus         VARCHAR(20)  NOT NULL DEFAULT 'prueba'
                     CHECK (estatus IN ('activo','prueba','inactivo')),
@@ -136,7 +150,13 @@ CREATE TABLE negocios (
     vencimiento     DATE         NOT NULL,                       -- vencimiento del plan/prueba actual
     created_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),         -- metadatos técnicos de auditoría
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
-    deleted_at      TIMESTAMPTZ                                  -- soft delete: NULL = activo, fecha = "borrado"
+    deleted_at      TIMESTAMPTZ,                                  -- soft delete: NULL = activo, fecha = "borrado"
+    CONSTRAINT ck_negocios_rfc          CHECK (rfc IS NULL OR rfc ~ '^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$'),
+    CONSTRAINT ck_negocios_regimen      CHECK (regimen_fiscal IS NULL OR regimen_fiscal ~ '^[0-9]{3}$'),
+    CONSTRAINT ck_negocios_cp_fiscal    CHECK (codigo_postal_fiscal IS NULL OR codigo_postal_fiscal ~ '^[0-9]{5}$'),
+    CONSTRAINT ck_negocios_fiscal_completo CHECK (
+        (rfc IS NULL AND razon_social IS NULL AND regimen_fiscal IS NULL AND codigo_postal_fiscal IS NULL)
+     OR (rfc IS NOT NULL AND razon_social IS NOT NULL AND regimen_fiscal IS NOT NULL AND codigo_postal_fiscal IS NOT NULL))
 );
 COMMENT ON TABLE negocios IS
   'Cada negocio que renta el sistema. id_plan apunta al plan actual vigente; el historial completo de pagos/cambios de plan vive en la tabla suscripciones.';
@@ -147,6 +167,7 @@ CREATE UNIQUE INDEX ux_negocios_uuid   ON negocios(uuid_negocio);
 CREATE UNIQUE INDEX ux_negocios_correo ON negocios(correo) WHERE deleted_at IS NULL;
 CREATE INDEX ix_negocios_plan  ON negocios(id_plan);
 CREATE INDEX ix_negocios_giro  ON negocios(id_giro);
+CREATE INDEX ix_negocios_municipio ON negocios(id_municipio);
 
 
 -- ============================================================
@@ -160,10 +181,10 @@ CREATE TABLE suscripciones (
     precio              NUMERIC(10,2) NOT NULL,  -- precio pagado en ESE periodo (histórico; si el plan sube de precio después, este registro no cambia)
     fecha_inicio        DATE         NOT NULL,
     fecha_vencimiento   DATE         NOT NULL,
-    fecha_pago          DATE,                     -- cuándo se registró el pago real (NULL si sigue pendiente)
+    fecha_pago          DATE,                     -- cuándo se registró el pago real (NULL en el periodo de prueba)
     metodo_pago         VARCHAR(20)  CHECK (metodo_pago IN ('transferencia','tarjeta','efectivo','otro')),
-    estatus             VARCHAR(20)  NOT NULL DEFAULT 'pendiente'
-                        CHECK (estatus IN ('pagada','pendiente','vencida','cancelada')),
+    estatus             VARCHAR(20)  NOT NULL
+                        CHECK (estatus IN ('prueba','pagada','cancelada')),  -- prueba = 15 días sin costo | pagada = 30 días cobrados | cancelada = pago registrado por error (no da acceso)
     notas               VARCHAR(255),
     created_at          TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
@@ -190,11 +211,6 @@ CREATE TABLE usuarios (
     nombre                      VARCHAR(100) NOT NULL,
     correo                      VARCHAR(150) NOT NULL,
     telefono                    VARCHAR(15),
-    direccion                   VARCHAR(200),
-    fecha_nacimiento            DATE,
-    id_genero                   BIGINT REFERENCES cat_generos(id_genero),
-    id_estado_civil             BIGINT REFERENCES cat_estados_civiles(id_estado_civil),
-    id_municipio                BIGINT REFERENCES cat_municipios(id_municipio),
 
     -- Acceso / seguridad
     password_hash               VARCHAR(255) NOT NULL,          -- SIEMPRE hash (bcrypt/argon2), nunca texto plano
@@ -213,7 +229,7 @@ COMMENT ON TABLE usuarios IS
   'Tabla central de identidad para superadmin, admin y trabajador. Datos específicos de rol viven en tablas de extensión.';
 
 CREATE UNIQUE INDEX ux_usuarios_uuid   ON usuarios(uuid_usuario);
-CREATE UNIQUE INDEX ux_usuarios_correo ON usuarios(correo) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX ux_usuarios_correo ON usuarios(lower(correo)) WHERE deleted_at IS NULL;
 CREATE INDEX ix_usuarios_tipo ON usuarios(tipo_usuario);
 
 -- ============================================================
@@ -248,35 +264,71 @@ CREATE TABLE trabajadores (
     id_usuario      BIGINT NOT NULL UNIQUE REFERENCES usuarios(id_usuario),  -- 1 a 1 con usuarios
     id_negocio      BIGINT NOT NULL REFERENCES negocios(id_negocio),
 
-    -- Datos personales adicionales (específicos de trabajador, no de usuarios en general)
-    curp            VARCHAR(18),
-    nss             VARCHAR(11),
+    -- Datos personales
+    fecha_nacimiento DATE,
+    id_genero        BIGINT REFERENCES cat_generos(id_genero),
+    id_estado_civil  BIGINT REFERENCES cat_estados_civiles(id_estado_civil),
+    direccion        VARCHAR(200),
+    id_municipio     BIGINT REFERENCES cat_municipios(id_municipio),
+    curp             VARCHAR(18),
+    nss              VARCHAR(11),
 
-    -- Puesto: qué hace el trabajador (vocacional, no controla permisos)
+    -- Contacto de emergencia
+    contacto_emergencia_nombre     VARCHAR(100),
+    contacto_emergencia_telefono   VARCHAR(10),
+    contacto_emergencia_parentesco VARCHAR(30),
+
+    -- Datos laborales
     puesto          VARCHAR(100) NOT NULL,
-    rol             VARCHAR(20)  NOT NULL
-                    CHECK (rol IN ('operador','diseñador','cajero','vendedor','otro')),
-
-    -- nivel_acceso controla qué ve en el sistema, independiente del puesto:
-        -- 'gerente'  → Dashboard, Pedidos, Ventas, Clientes, Asistencia, Vacaciones,
-        --              Justificantes, Solicitudes, Citas, Perfil.
-        --              NUNCA ve Productos, Proveedores, Categorías, Trabajadores,
-        --              Configuración, Reportes (protege costos/contactos del dueño).
-        -- 'estandar' → Dashboard, Asistencia, Vacaciones, Justificantes,
-        --              Solicitudes, Perfil (solo autoservicio personal).
-        nivel_acceso    VARCHAR(20)  NOT NULL DEFAULT 'estandar'
-                    CHECK (nivel_acceso IN ('gerente','estandar')),
-
+    rol             VARCHAR(20)  NOT NULL,                  -- texto libre: qué hace en ese negocio
+    nivel_acceso    VARCHAR(20)  NOT NULL DEFAULT 'estandar'
+                    CHECK (nivel_acceso IN ('gerente','estandar')),   -- controla qué módulos ve
     turno           VARCHAR(20)  NOT NULL CHECK (turno IN ('mañana','tarde','completo')),
-    tipo_contrato   VARCHAR(20)  NOT NULL CHECK (tipo_contrato IN ('planta','temporal','honorarios')),
-    salario         NUMERIC(10,2) NOT NULL CHECK (salario >= 0),
+    tipo_contrato   VARCHAR(20)  NOT NULL,                  -- texto libre
     fecha_ingreso   DATE         NOT NULL DEFAULT CURRENT_DATE,
-    notas           VARCHAR(300)
+    notas           VARCHAR(300),
+
+    -- Pago
+    salario            NUMERIC(10,2) NOT NULL CHECK (salario >= 0),   -- monto por periodo de pago
+    periodicidad_pago  VARCHAR(20)   NOT NULL DEFAULT 'mensual'
+                       CHECK (periodicidad_pago IN ('diario','semanal','quincenal','mensual')),
+    metodo_pago        VARCHAR(20)   NOT NULL DEFAULT 'efectivo'
+                       CHECK (metodo_pago IN ('efectivo','transferencia','cheque')),
+    banco              VARCHAR(50),
+    clabe              VARCHAR(18),
+
+    -- Régimen
+    regimen                  VARCHAR(10) NOT NULL DEFAULT 'informal'
+                             CHECK (regimen IN ('informal','formal')),
+    rfc                      VARCHAR(13),
+    numero_empleado          VARCHAR(20),
+    salario_diario_integrado NUMERIC(10,2) CHECK (salario_diario_integrado IS NULL OR salario_diario_integrado >= 0),
+    fecha_alta_imss          DATE,
+    dias_aguinaldo           SMALLINT CHECK (dias_aguinaldo IS NULL OR dias_aguinaldo >= 15),
+    prima_vacacional_pct     SMALLINT CHECK (prima_vacacional_pct IS NULL OR prima_vacacional_pct BETWEEN 25 AND 100),
+
+    -- Formatos
+    CONSTRAINT ck_trabajadores_nacimiento    CHECK (fecha_nacimiento IS NULL OR fecha_nacimiento <= CURRENT_DATE),
+    CONSTRAINT ck_trabajadores_curp          CHECK (curp IS NULL OR curp ~ '^[A-Z0-9]{18}$'),
+    CONSTRAINT ck_trabajadores_nss           CHECK (nss  IS NULL OR nss  ~ '^[0-9]{11}$'),
+    CONSTRAINT ck_trabajadores_rfc           CHECK (rfc  IS NULL OR rfc  ~ '^[A-ZÑ&]{4}[0-9]{6}[A-Z0-9]{3}$'),
+    CONSTRAINT ck_trabajadores_clabe         CHECK (clabe IS NULL OR clabe ~ '^[0-9]{18}$'),
+    CONSTRAINT ck_trabajadores_emergencia_tel CHECK (contacto_emergencia_telefono IS NULL
+                                                     OR contacto_emergencia_telefono ~ '^[0-9]{10}$'),
+
+    -- Reglas entre campos
+    CONSTRAINT ck_trabajador_formal CHECK (
+        regimen = 'informal'
+        OR (curp IS NOT NULL AND nss IS NOT NULL AND rfc IS NOT NULL
+            AND salario_diario_integrado IS NOT NULL AND fecha_alta_imss IS NOT NULL)),
+    CONSTRAINT ck_trabajador_transferencia CHECK (
+        metodo_pago <> 'transferencia' OR (banco IS NOT NULL AND clabe IS NOT NULL))
 );
-COMMENT ON TABLE trabajadores IS
-  'rol = puesto vocacional (qué hace). nivel_acceso = qué módulos puede ver (permisos). Son conceptos independientes.';
 
 CREATE INDEX ix_trabajadores_negocio ON trabajadores(id_negocio);
+
+COMMENT ON TABLE trabajadores IS
+  'rol = qué hace (texto libre). nivel_acceso = qué módulos ve. regimen = con o sin nómina formal. Son conceptos independientes.';
 
 -- ============================================================
 -- BLOQUE 9: ROL_MODULOS (permisos data-driven)
@@ -305,6 +357,7 @@ CREATE TABLE refresh_tokens (
     token_hash          VARCHAR(255) NOT NULL,   -- SHA-256 del token real, nunca el token en claro
     ip_origen           VARCHAR(45),              -- IPv4/IPv6 de origen, para auditoría
     user_agent          VARCHAR(255),
+    id_negocio_activo   BIGINT REFERENCES negocios(id_negocio),  -- negocio con el que trabaja el ADMIN en esta sesión (NULL para los demás)
     fecha_expiracion    TIMESTAMPTZ NOT NULL,
     revocado            BOOLEAN NOT NULL DEFAULT false,
     fecha_revocado       TIMESTAMPTZ,
@@ -392,24 +445,24 @@ COMMENT ON TABLE cat_tipos_entidad_archivo IS
 -- ============================================================
 
 -- Módulos base ya existentes en el sistema
-INSERT INTO cat_modulos (nombre, descripcion, icono, ruta, orden) VALUES
-  ('Dashboard',      'Panel principal con resumen, distinto según el rol que lo consulta', 'chart-pie',        '/dashboard',      1),
-  ('Asistencia',     'Registro y consulta de asistencia de trabajadores',                  'user-check',       '/asistencia',     2),
-  ('Pedidos',        'Gestión de pedidos con seguimiento de proceso (negocios servicio)',  'clipboard-list',   '/pedidos',        3),
-  ('Ventas',         'Venta directa de productos (negocios tienda)',                        'cash-register',    '/ventas',         4),
-  ('Clientes',       'Catálogo de clientes frecuentes, factura y mayoristas',               'users',            '/clientes',       5),
-  ('Cotizaciones',   'Elaboración de cotizaciones previas a un pedido',                     'file-invoice',     '/cotizaciones',   6),
-  ('Productos',      'Catálogo de productos con precios e inventario',                      'box-open',         '/productos',      7),
-  ('Proveedores',    'Contactos y condiciones de compra a proveedores',                     'truck',            '/proveedores',    8),
-  ('Categorías',     'Clasificación de productos o servicios',                              'tag',              '/categorias',     9),
-  ('Trabajadores',   'Alta y gestión del personal del negocio',                             'user-tie',         '/trabajadores',  10),
-  ('Configuración',  'Ajustes generales del negocio',                                       'sliders',          '/configuracion', 11),
-  ('Justificantes',  'Solicitud y autorización de justificantes de falta',                  'file-signature',   '/justificantes', 12),
-  ('Vacaciones',     'Solicitud y control de días de vacaciones',                           'umbrella-beach',   '/vacaciones',    13),
-  ('Solicitudes',    'Permisos especiales: home office, licencia médica, etc.',             'inbox',            '/solicitudes',   14),
-  ('Citas',          'Agenda de citas con clientes (negocios tipo servicio)',               'calendar-check',   '/citas',         15),
-  ('Reportes',       'Reportes y estadísticas del negocio',                                 'chart-line',       '/reportes',      16),
-  ('Perfil',         'Datos personales y configuración de la propia cuenta',                'user',             '/perfil',        17);
+INSERT INTO cat_modulos (clave, nombre, descripcion, icono, ruta, orden) VALUES
+  ('dashboard', 'Dashboard',      'Panel principal con resumen, distinto según el rol que lo consulta', 'chart-pie',        '/dashboard',      1),
+  ('asistencia', 'Asistencia',     'Registro y consulta de asistencia de trabajadores',                  'user-check',       '/asistencia',     2),
+  ('pedidos', 'Pedidos',        'Gestión de pedidos con seguimiento de proceso (negocios servicio)',  'clipboard-list',   '/pedidos',        3),
+  ('ventas', 'Ventas',         'Venta directa de productos (negocios tienda)',                        'cash-register',    '/ventas',         4),
+  ('clientes', 'Clientes',       'Catálogo de clientes frecuentes, factura y mayoristas',               'users',            '/clientes',       5),
+  ('cotizaciones', 'Cotizaciones',   'Elaboración de cotizaciones previas a un pedido',                     'file-invoice',     '/cotizaciones',   6),
+  ('productos', 'Productos',      'Catálogo de productos con precios e inventario',                      'box-open',         '/productos',      7),
+  ('proveedores', 'Proveedores',    'Contactos y condiciones de compra a proveedores',                     'truck',            '/proveedores',    8),
+  ('categorias', 'Categorías',     'Clasificación de productos o servicios',                              'tag',              '/categorias',     9),
+  ('trabajadores', 'Trabajadores',   'Alta y gestión del personal del negocio',                             'user-tie',         '/trabajadores',  10),
+  ('configuracion', 'Configuración',  'Ajustes generales del negocio',                                       'sliders',          '/configuracion', 11),
+  ('justificantes', 'Justificantes',  'Solicitud y autorización de justificantes de falta',                  'file-signature',   '/justificantes', 12),
+  ('vacaciones', 'Vacaciones',     'Solicitud y control de días de vacaciones',                           'umbrella-beach',   '/vacaciones',    13),
+  ('solicitudes', 'Solicitudes',    'Permisos especiales: home office, licencia médica, etc.',             'inbox',            '/solicitudes',   14),
+  ('citas', 'Citas',          'Agenda de citas con clientes (negocios tipo servicio)',               'calendar-check',   '/citas',         15),
+  ('reportes', 'Reportes',       'Reportes y estadísticas del negocio',                                 'chart-line',       '/reportes',      16),
+  ('perfil', 'Perfil',         'Datos personales y configuración de la propia cuenta',                'user',             '/perfil',        17);
 
 -- Giros de negocio de ejemplo
 INSERT INTO cat_giros_negocio (nombre, icono, orden) VALUES
@@ -427,9 +480,10 @@ INSERT INTO cat_giros_negocio (nombre, icono, orden) VALUES
 -- GERENTE: control operativo amplio, sin ver costos/proveedores/config
 INSERT INTO rol_modulos (tipo_usuario, nivel_acceso, id_modulo)
 SELECT 'trabajador', 'gerente', id_modulo FROM cat_modulos
-WHERE nombre IN (
-  'Dashboard','Asistencia','Pedidos','Ventas','Clientes',
-  'Vacaciones','Justificantes','Solicitudes','Citas','Perfil'
+-- (Los módulos del gerente se definirán más adelante; por ahora se conserva su lista original.)
+WHERE clave IN (
+  'dashboard','asistencia','pedidos','ventas','clientes',
+  'vacaciones','justificantes','solicitudes','citas','perfil'
 );
 
 -- ESTANDAR: solo autoservicio personal

@@ -20,7 +20,8 @@ import lombok.Setter;
 public class RegistrarUsuarioRequestDTO {
 
     @NotBlank
-    @Schema(description = "Tipo de usuario a crear", example = "admin", allowableValues = {"superadmin", "admin", "trabajador"})
+    @Pattern(regexp = "^admin$", message = "Por este medio solo se pueden registrar administradores")
+    @Schema(description = "Tipo de usuario a crear (solo 'admin')", example = "admin", allowableValues = {"admin"})
     private String tipoUsuario;
 
     @NotBlank
@@ -32,6 +33,14 @@ public class RegistrarUsuarioRequestDTO {
     @Email
     @Schema(description = "Correo electrónico, será el usuario de acceso", example = "julian@thejulians.com")
     private String correo;
+
+    /**
+     * Normaliza el correo al recibirlo: sin espacios y en minúsculas.
+     * Así 'Juan@X.com' y 'juan@x.com' son la misma cuenta (el índice único de BD ignora mayúsculas).
+     */
+    public void setCorreo(String correo) {
+        this.correo = correo == null ? null : correo.trim().toLowerCase();
+    }
 
     @Pattern(regexp = "^\\d{10}$", message = "El teléfono debe tener 10 dígitos")
     @Schema(description = "Teléfono a 10 dígitos", example = "9931000001", nullable = true)

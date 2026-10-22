@@ -24,4 +24,12 @@ public class LoginRequestDTO {
     @NotBlank(message = "La contraseña es obligatoria")
     @Schema(description = "Contraseña en texto plano (se valida contra el hash almacenado)", example = "MiPassword123!")
     private String password;
+
+    /**
+     * Normaliza el correo al recibirlo: sin espacios y en minúsculas.
+     * Así 'Juan@X.com' y 'juan@x.com' son la misma cuenta (el índice único de BD ignora mayúsculas).
+     */
+    public void setCorreo(String correo) {
+        this.correo = correo == null ? null : correo.trim().toLowerCase();
+    }
 }

@@ -37,4 +37,10 @@ public class PlanResponseDTO {
 
     @Schema(description = "Módulos incluidos en este plan")
     private List<ModuloResponseDTO> modulos;
+
+    @Schema(description = "Máximo de trabajadores activos; null = sin límite", nullable = true)
+    private Integer maxTrabajadores;
+
+    @Schema(description = "Máximo de administradores activos por negocio; null = sin límite", nullable = true)
+    private Integer maxAdministradores;
 }

@@ -19,7 +19,7 @@ public interface NegocioService {
 
     NegocioResponseDTO obtenerPorUuid(UUID uuidNegocio);
 
-    List<NegocioResponseDTO> listarActivos();
+    List<NegocioResponseDTO> listarTodos();
 
     NegocioResponseDTO subirLogo(UUID uuidNegocio, MultipartFile archivo);
 }

@@ -57,11 +57,12 @@ public class NegocioController extends BaseController {
         return okEncontrado(negocioService.obtenerPorUuid(uuidNegocio));
     }
 
-    @Operation(summary = "Listar negocios activos", description = "Solo superadmin.")
+    @Operation(summary = "Listar todos los negocios",
+            description = "En prueba, activos, suspendidos y vencidos. Incluye cuántos administradores y trabajadores activos tiene cada uno. Solo superadmin.")
     @PreAuthorize("hasRole('SUPERADMIN')")
     @GetMapping
-    public ResponseEntity<ApiDataResponseDTO<List<NegocioResponseDTO>>> listarActivos() {
-        return ok(negocioService.listarActivos());
+    public ResponseEntity<ApiDataResponseDTO<List<NegocioResponseDTO>>> listarTodos() {
+        return ok(negocioService.listarTodos());
     }
 
     @Operation(summary = "Subir el logo de un negocio",

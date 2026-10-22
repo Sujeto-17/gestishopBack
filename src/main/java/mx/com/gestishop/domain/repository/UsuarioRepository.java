@@ -14,7 +14,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     // Busca un usuario activo (no borrado lógicamente) por su correo. Usado en el login: se valida credenciales contra este resultado
     @Query("""
             SELECT u FROM Usuario u
-            WHERE u.correo = :correo
+            WHERE lower(u.correo) = lower(:correo)
               AND u.deletedAt IS NULL
             """)
     Optional<Usuario> buscarPorCorreoActivo(@Param("correo") String correo);
@@ -35,7 +35,7 @@ public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
     @Query("""
             SELECT CASE WHEN COUNT(u) > 0 THEN true ELSE false END
             FROM Usuario u
-            WHERE u.correo = :correo
+            WHERE lower(u.correo) = lower(:correo)
               AND u.deletedAt IS NULL
             """)
     boolean existeCorreoActivo(@Param("correo") String correo);

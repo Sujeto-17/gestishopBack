@@ -37,6 +37,9 @@ public class LoginResponseDTO {
     @Schema(description = "ID del negocio al que pertenece, no aplica para superadmin", nullable = true)
     private Long idNegocio;
 
-    @Schema(description = "Lista de nombres de módulos que este usuario puede ver en el menú")
+    @Schema(description = "Claves de los módulos que este usuario puede ver en el menú (ej. \"productos\")")
     private List<String> modulos;
+
+    @Schema(description = "Negocios a los que puede entrar un administrador (para el selector). Vacío para los demás usuarios")
+    private List<NegocioSesionDTO> negocios;
 }

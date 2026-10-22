@@ -2,9 +2,12 @@ package mx.com.gestishop.infrastructure.controller;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import mx.com.gestishop.application.dto.request.VincularNegocioRequestDTO;
 import mx.com.gestishop.application.dto.response.AdminResponseDTO;
 import mx.com.gestishop.core.dto.ApiDataResponseDTO;
+import mx.com.gestishop.core.dto.CatalogoRefDTO;
 import mx.com.gestishop.core.generic.BaseController;
 import mx.com.gestishop.domain.interfaces.AdminService;
 import org.springframework.http.ResponseEntity;
@@ -56,5 +59,30 @@ public class AdminController extends BaseController {
             @PathVariable UUID uuidUsuario) {
         String passwordTemporal = adminService.restablecerPassword(uuidUsuario);
         return ok(Map.of("passwordTemporal", passwordTemporal));
+    }
+
+    @Operation(summary = "Listar los negocios de un administrador",
+            description = "Un dueño puede tener varios negocios o sucursales con la misma cuenta.")
+    @GetMapping("/{uuidUsuario}/negocios")
+    public ResponseEntity<ApiDataResponseDTO<List<CatalogoRefDTO>>> listarNegocios(@PathVariable UUID uuidUsuario) {
+        return ok(adminService.listarNegocios(uuidUsuario));
+    }
+
+    @Operation(summary = "Asignar un administrador existente a otro negocio",
+            description = "Para un dueño con varias sucursales: no se crea otra cuenta, el mismo correo entra a ambos negocios " +
+                    "y verá un selector de negocio al iniciar sesión.")
+    @PostMapping("/{uuidUsuario}/negocios")
+    public ResponseEntity<ApiDataResponseDTO<AdminResponseDTO>> vincularNegocio(
+            @PathVariable UUID uuidUsuario, @Valid @RequestBody VincularNegocioRequestDTO dto) {
+        return okCreado(adminService.vincularNegocio(uuidUsuario, dto.getIdNegocio()));
+    }
+
+    @Operation(summary = "Quitar a un administrador de un negocio",
+            description = "No se permite si es su único negocio ni si es el único administrador activo de ese negocio.")
+    @DeleteMapping("/{uuidUsuario}/negocios/{idNegocio}")
+    public ResponseEntity<ApiDataResponseDTO<Void>> desvincularNegocio(
+            @PathVariable UUID uuidUsuario, @PathVariable Long idNegocio) {
+        adminService.desvincularNegocio(uuidUsuario, idNegocio);
+        return okEliminado();
     }
 }

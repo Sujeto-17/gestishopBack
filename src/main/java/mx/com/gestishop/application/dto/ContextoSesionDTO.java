@@ -2,6 +2,7 @@ package mx.com.gestishop.application.dto;
 
 import lombok.Builder;
 import lombok.Getter;
+import mx.com.gestishop.application.dto.response.NegocioSesionDTO;
 
 import java.util.List;
 
@@ -22,6 +23,10 @@ public class ContextoSesionDTO {
     // Nivel de acceso (gerente | estandar), solo aplica si es trabajador
     private final String nivelAcceso;
 
-    // Nombres de los módulos que este usuario puede ver en el menú
+    // CLAVES de los módulos que este usuario puede ver (ej. "productos"), no sus nombres: el nombre
+    // se puede editar en pantalla, la clave nunca.
     private final List<String> modulos;
+
+    // Negocios a los que puede entrar un ADMIN (para el selector). Vacío para los demás tipos.
+    private final List<NegocioSesionDTO> negocios;
 }

@@ -4,6 +4,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import mx.com.gestishop.application.dto.request.CancelarPeriodoRequestDTO;
 import mx.com.gestishop.application.dto.request.SuscripcionRequestDTO;
 import mx.com.gestishop.application.dto.response.SuscripcionResponseDTO;
 import mx.com.gestishop.core.dto.ApiDataResponseDTO;
@@ -16,12 +17,12 @@ import org.springframework.web.bind.annotation.*;
 import java.util.List;
 
 /**
- * Gestión del historial de suscripciones (pagos) de los negocios.
- * Exclusivo del superadmin — es quien cobra la renta del sistema.
- * El primer periodo de cada negocio se crea automáticamente al darlo
- * de alta (ver NegocioServiceImpl), no existe un POST directo aquí.
+ * Pagos y periodos de suscripción de los negocios.
+ * Exclusivo del superadmin: es quien cobra la renta del sistema.
+ * El periodo de prueba se crea solo al dar de alta el negocio (ver NegocioServiceImpl); aquí solo se
+ * registran pagos, se cancelan los registrados por error y se consulta el historial.
  */
-@Tag(name = "Suscripciones", description = "Historial de pagos y periodos de suscripción por negocio")
+@Tag(name = "Suscripciones", description = "Pagos y periodos de suscripción por negocio")
 @RestController
 @RequestMapping("/api/v1/suscripciones")
 @RequiredArgsConstructor
@@ -30,20 +31,22 @@ public class SuscripcionController extends BaseController {
 
     private final SuscripcionService suscripcionService;
 
-    @Operation(summary = "Confirmar el pago de un periodo",
-            description = "Marca un periodo pendiente como pagado, registrando fecha y método de pago.")
-    @PatchMapping("/{idSuscripcion}/pagar")
-    public ResponseEntity<ApiDataResponseDTO<SuscripcionResponseDTO>> confirmarPago(
-            @PathVariable Long idSuscripcion, @Valid @RequestBody SuscripcionRequestDTO dto) {
-        return okActualizado(suscripcionService.confirmarPago(idSuscripcion, dto));
+    @Operation(summary = "Registrar el pago de un negocio y reactivar su acceso",
+            description = "Acción principal cuando un cliente paga. Crea el periodo de 30 días ya pagado; si al negocio aún le " +
+                    "quedaban días, empieza donde termina el actual. El negocio queda 'activo' hasta el fin de ese periodo.")
+    @PostMapping("/negocio/{idNegocio}/pago")
+    public ResponseEntity<ApiDataResponseDTO<SuscripcionResponseDTO>> registrarPago(
+            @PathVariable Long idNegocio, @Valid @RequestBody SuscripcionRequestDTO dto) {
+        return okCreado(suscripcionService.registrarPago(idNegocio, dto));
     }
 
-    @Operation(summary = "Renovar la suscripción de un negocio",
-            description = "Genera el siguiente periodo de 30 días. Si el periodo actual aún no vence, " +
-                    "el nuevo inicia justo al terminar el anterior (no se pierden días pagados).")
-    @PostMapping("/negocio/{idNegocio}/renovar")
-    public ResponseEntity<ApiDataResponseDTO<SuscripcionResponseDTO>> renovar(@PathVariable Long idNegocio) {
-        return okCreado(suscripcionService.renovar(idNegocio));
+    @Operation(summary = "Cancelar un periodo pagado",
+            description = "Para pagos registrados por error. Recalcula el vencimiento y el estatus del negocio con los periodos " +
+                    "que quedan. Solo aplica a periodos pagados.")
+    @PatchMapping("/{idSuscripcion}/cancelar")
+    public ResponseEntity<ApiDataResponseDTO<SuscripcionResponseDTO>> cancelarPeriodo(
+            @PathVariable Long idSuscripcion, @Valid @RequestBody CancelarPeriodoRequestDTO dto) {
+        return okActualizado(suscripcionService.cancelarPeriodo(idSuscripcion, dto));
     }
 
     @Operation(summary = "Listar el historial de un negocio", description = "Del periodo más reciente al más antiguo.")
@@ -51,12 +54,5 @@ public class SuscripcionController extends BaseController {
     public ResponseEntity<ApiDataResponseDTO<List<SuscripcionResponseDTO>>> listarPorNegocio(
             @PathVariable Long idNegocio) {
         return ok(suscripcionService.listarPorNegocio(idNegocio));
-    }
-
-    @Operation(summary = "Listar periodos vencidos sin pagar",
-            description = "Reporte de negocios morosos: periodos ya vencidos que nunca se marcaron como pagados.")
-    @GetMapping("/vencidas")
-    public ResponseEntity<ApiDataResponseDTO<List<SuscripcionResponseDTO>>> listarVencidasPendientes() {
-        return ok(suscripcionService.listarVencidasPendientes());
     }
 }

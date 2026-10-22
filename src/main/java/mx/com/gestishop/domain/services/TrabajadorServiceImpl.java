@@ -1,6 +1,7 @@
 package mx.com.gestishop.domain.services;
 
 import lombok.RequiredArgsConstructor;
+import mx.com.gestishop.application.dto.TrabajadorBaseDTO;
 import mx.com.gestishop.application.dto.request.TrabajadorActualizarRequestDTO;
 import mx.com.gestishop.application.dto.request.TrabajadorRequestDTO;
 import mx.com.gestishop.application.dto.response.TrabajadorResponseDTO;
@@ -14,17 +15,15 @@ import mx.com.gestishop.domain.interfaces.TrabajadorService;
 import mx.com.gestishop.domain.model.Negocio;
 import mx.com.gestishop.domain.model.Trabajador;
 import mx.com.gestishop.domain.model.Usuario;
-import mx.com.gestishop.domain.repository.NegocioRepository;
-import mx.com.gestishop.domain.repository.TrabajadorRepository;
-import mx.com.gestishop.domain.repository.UsuarioRepository;
+import mx.com.gestishop.domain.repository.*;
 import mx.com.gestishop.infrastructure.utils.PasswordGeneratorUtil;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
+import java.util.function.Function;
 
 /**
  * Implementación del alta y gestión de trabajadores. Orquesta dos tablas
@@ -38,13 +37,20 @@ public class TrabajadorServiceImpl implements TrabajadorService {
     private final TrabajadorRepository trabajadorRepository;
     private final UsuarioRepository usuarioRepository;
     private final NegocioRepository negocioRepository;
+    private final CatGeneroRepository catGeneroRepository;
+    private final CatEstadoCivilRepository catEstadoCivilRepository;
+    private final CatMunicipioRepository catMunicipioRepository;
+
     private final PasswordEncoder passwordEncoder;
 
     private final RefreshTokenService refreshTokenService;
+    private final PlanLimites planLimites;   // límites del plan (cuántos trabajadores caben)
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TrabajadorResponseDTO crear(TrabajadorRequestDTO dto) {
+    public TrabajadorResponseDTO crear(TrabajadorRequestDTO dto, Long idNegocio) {
+
+        validarRegimenYPago(dto);
 
         // Validar correo único entre usuarios activos
         boolean correoExiste = RepositoryExecutor.execute(
@@ -59,10 +65,13 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
         // El negocio debe existir
         Negocio negocio = RepositoryExecutor.execute(
-                () -> negocioRepository.findById(dto.getIdNegocio())
-                        .orElseThrow(() -> ErrorFactory.notFound("Negocio", dto.getIdNegocio())),
+                () -> negocioRepository.findById(idNegocio)
+                        .orElseThrow(() -> ErrorFactory.notFound("Negocio", idNegocio)),
                 "Negocio", "consultar"
         );
+
+        // El plan del negocio puede limitar cuántos trabajadores activos tiene
+        planLimites.validarAgregarTrabajador(negocio);
 
         // Crear la identidad de acceso (tabla usuarios). Password encriptado aquí,
         //    nunca se persiste en texto plano en ningún punto del flujo.
@@ -72,6 +81,8 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
         // Crear el registro laboral (tabla trabajadores), ligado al usuario y negocio anteriores
         Trabajador trabajador = TrabajadorMapper.toTrabajadorEntity(dto, usuarioGuardado, negocio);
+        asignarCatalogos(trabajador, dto);
+
         Trabajador guardado = RepositoryExecutor.execute(
                 () -> trabajadorRepository.save(trabajador), "Trabajador", "crear");
 
@@ -84,9 +95,12 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TrabajadorResponseDTO actualizar(UUID uuidUsuario, TrabajadorActualizarRequestDTO dto) {
+    public TrabajadorResponseDTO actualizar(UUID uuidUsuario, TrabajadorActualizarRequestDTO dto, Long idNegocio) {
+
+        validarRegimenYPago(dto);
+
         Trabajador entidad = RepositoryExecutor.execute(
-                () -> trabajadorRepository.buscarPorUuidUsuario(uuidUsuario)
+                () -> trabajadorRepository.buscarPorUuidUsuarioYNegocio(uuidUsuario, idNegocio)
                         .orElseThrow(() -> ErrorFactory.notFound("Trabajador", uuidUsuario)),
                 "Trabajador", "actualizar"
         );
@@ -95,6 +109,8 @@ public class TrabajadorServiceImpl implements TrabajadorService {
         // — el cambio de correo o password requiere flujos propios por seguridad)
         Usuario usuario = entidad.getUsuario();
         TrabajadorMapper.actualizarEntidad(entidad, usuario, dto);
+        asignarCatalogos(entidad, dto);
+
         RepositoryExecutor.executeVoid(() -> usuarioRepository.save(usuario), "Usuario", "actualizar");
 
         Trabajador actualizado = RepositoryExecutor.execute(
@@ -106,9 +122,9 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public TrabajadorResponseDTO cambiarEstatus(UUID uuidUsuario) {
+    public TrabajadorResponseDTO cambiarEstatus(UUID uuidUsuario, Long idNegocio) {
         Trabajador entidad = RepositoryExecutor.execute(
-                () -> trabajadorRepository.buscarPorUuidUsuario(uuidUsuario)
+                () -> trabajadorRepository.buscarPorUuidUsuarioYNegocio(uuidUsuario, idNegocio)
                         .orElseThrow(() -> ErrorFactory.notFound("Trabajador", uuidUsuario)),
                 "Trabajador", "cambiarEstatus"
         );
@@ -116,18 +132,30 @@ public class TrabajadorServiceImpl implements TrabajadorService {
         // El estatus vive en usuarios (activo/inactivo controla el acceso al sistema),
         // no en trabajadores (esa tabla no tiene columna estatus propia).
         Usuario usuario = entidad.getUsuario();
+
+        // Reactivar a un trabajador también ocupa un lugar del plan
+        if ("inactivo".equals(usuario.getEstatus())) {
+            planLimites.validarAgregarTrabajador(entidad.getNegocio());
+        }
+
         usuario.setEstatus("activo".equals(usuario.getEstatus()) ? "inactivo" : "activo");
 
         RepositoryExecutor.executeVoid(() -> usuarioRepository.save(usuario), "Usuario", "cambiarEstatus");
+
+        // Al DESACTIVAR la cuenta se cierran todas sus sesiones abiertas (refresh tokens).
+        // El access token sigue vivo como máximo 15 min, y ya no se podrá renovar.
+        if ("inactivo".equals(usuario.getEstatus())) {
+            refreshTokenService.revocarTodasDelUsuario(usuario.getIdUsuario());
+        }
         entidad.setUsuario(usuario);
 
         return TrabajadorMapper.toResponse(entidad);
     }
 
     @Override
-    public TrabajadorResponseDTO obtenerPorUuid(UUID uuidUsuario) {
+    public TrabajadorResponseDTO obtenerPorUuid(UUID uuidUsuario, Long idNegocio) {
         Trabajador entidad = RepositoryExecutor.execute(
-                () -> trabajadorRepository.buscarPorUuidUsuario(uuidUsuario)
+                () -> trabajadorRepository.buscarPorUuidUsuarioYNegocio(uuidUsuario, idNegocio)
                         .orElseThrow(() -> ErrorFactory.notFound("Trabajador", uuidUsuario)),
                 "Trabajador", "consultar"
         );
@@ -143,9 +171,9 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
     @Override
     @Transactional(rollbackFor = Exception.class)
-    public String restablecerPassword(UUID uuidUsuario) {
+    public String restablecerPassword(UUID uuidUsuario, Long idNegocio) {
         Trabajador entidad = RepositoryExecutor.execute(
-                () -> trabajadorRepository.buscarPorUuidUsuario(uuidUsuario)
+                () -> trabajadorRepository.buscarPorUuidUsuarioYNegocio(uuidUsuario, idNegocio)
                         .orElseThrow(() -> ErrorFactory.notFound("Trabajador", uuidUsuario)),
                 "Trabajador", "restablecerPassword"
         );
@@ -161,4 +189,47 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
         return passwordTemporal;
     }
+
+    /**
+     * Reglas que dependen de otros campos y que las anotaciones no pueden expresar:
+     * - régimen formal exige CURP, NSS, RFC, SDI y fecha de alta en el IMSS
+     * - pago por transferencia exige banco y CLABE
+     * Se reportan todos los faltantes juntos en un solo mensaje.
+     */
+    private void validarRegimenYPago(TrabajadorBaseDTO dto) {
+        List<String> faltantes = new ArrayList<>();
+
+        if ("formal".equals(dto.getRegimen())) {
+            if (!StringUtils.hasText(dto.getCurp())) faltantes.add("CURP");
+            if (!StringUtils.hasText(dto.getNss())) faltantes.add("NSS");
+            if (!StringUtils.hasText(dto.getRfc())) faltantes.add("RFC");
+            if (dto.getSalarioDiarioIntegrado() == null) faltantes.add("salario diario integrado");
+            if (dto.getFechaAltaImss() == null) faltantes.add("fecha de alta en el IMSS");
+        }
+
+        if ("transferencia".equals(dto.getMetodoPago())) {
+            if (!StringUtils.hasText(dto.getBanco())) faltantes.add("banco");
+            if (!StringUtils.hasText(dto.getClabe())) faltantes.add("CLABE");
+        }
+
+        if (!faltantes.isEmpty()) {
+            throw new ApiResponseException(ApiCodeResponse.REQUIRED_DATA,
+                    Map.of("detalle", "Faltan datos obligatorios: " + String.join(", ", faltantes) + "."));
+        }
+    }
+
+    // Métodos privados nuevos (imports: java.util.Optional, java.util.function.Function):
+    private void asignarCatalogos(Trabajador t, TrabajadorBaseDTO dto) {
+        t.setGenero(cargarOpcional(dto.getIdGenero(), catGeneroRepository::findById, "CatGenero"));
+        t.setEstadoCivil(cargarOpcional(dto.getIdEstadoCivil(), catEstadoCivilRepository::findById, "CatEstadoCivil"));
+        t.setMunicipio(cargarOpcional(dto.getIdMunicipio(), catMunicipioRepository::findById, "CatMunicipio"));
+    }
+
+    private <T> T cargarOpcional(Long id, Function<Long, Optional<T>> buscar, String entidad) {
+        if (id == null) return null;
+        return RepositoryExecutor.execute(
+                () -> buscar.apply(id).orElseThrow(() -> ErrorFactory.notFound(entidad, id)),
+                entidad, "consultar");
+    }
 }
+

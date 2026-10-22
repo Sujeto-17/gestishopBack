@@ -38,6 +38,14 @@ public class Plan {
     @Column(name = "descripcion", nullable = false, length = 160)
     private String descripcion;
 
+    // Límites del plan. null = sin límite. Se validan al registrar trabajadores y administradores del negocio
+    // (ver PlanLimites). Un negocio que ya excede el límite al bajar de plan NO se bloquea: solo no puede agregar más.
+    @Column(name = "max_trabajadores")
+    private Integer maxTrabajadores;
+
+    @Column(name = "max_administradores")
+    private Integer maxAdministradores;
+
     @Column(name = "estatus", nullable = false, length = 20)
     private String estatus;
 
@@ -68,3 +76,4 @@ public class Plan {
         updatedAt = OffsetDateTime.now();
     }
 }
+

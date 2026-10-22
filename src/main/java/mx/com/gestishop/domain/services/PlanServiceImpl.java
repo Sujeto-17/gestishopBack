@@ -4,6 +4,8 @@ import lombok.RequiredArgsConstructor;
 import mx.com.gestishop.application.dto.request.PlanRequestDTO;
 import mx.com.gestishop.application.dto.response.PlanResponseDTO;
 import mx.com.gestishop.application.mapper.PlanMapper;
+import mx.com.gestishop.core.enums.ApiCodeResponse;
+import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.exception.RepositoryExecutor;
 import mx.com.gestishop.core.generic.ErrorFactory;
 import mx.com.gestishop.domain.interfaces.PlanService;
@@ -14,10 +16,8 @@ import mx.com.gestishop.domain.repository.PlanRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-import java.util.UUID;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * Implementación de la gestión de planes. La relación con módulos (N:M) se
@@ -101,7 +101,18 @@ public class PlanServiceImpl implements PlanService {
 
     // Carga las entidades CatModulo correspondientes a la lista de IDs recibida en el DTO
     private Set<CatModulo> cargarModulos(List<Long> idModulos) {
-        return new HashSet<>(RepositoryExecutor.execute(
-                () -> catModuloRepository.buscarPorIds(idModulos), "CatModulo", "cargarParaPlan"));
+        Set<Long> pedidos = new HashSet<>(idModulos);
+
+        List<CatModulo> encontrados = RepositoryExecutor.execute(
+                () -> catModuloRepository.buscarPorIds(new ArrayList<>(pedidos)), "CatModulo", "cargarParaPlan");
+
+        // Antes, un id que no existía se ignoraba en silencio y el plan podía quedar sin módulos
+        if (encontrados.size() != pedidos.size()) {
+            pedidos.removeAll(encontrados.stream().map(CatModulo::getIdModulo).collect(Collectors.toSet()));
+            throw new ApiResponseException(ApiCodeResponse.RESOURCE_NOT_FOUND,
+                    Map.of("detalle", "No existen los módulos con id: " + pedidos));
+        }
+
+        return new HashSet<>(encontrados);
     }
 }

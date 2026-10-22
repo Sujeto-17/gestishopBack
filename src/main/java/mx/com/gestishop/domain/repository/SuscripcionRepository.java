@@ -2,6 +2,7 @@ package mx.com.gestishop.domain.repository;
 
 import mx.com.gestishop.domain.model.Suscripcion;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -9,7 +10,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-// Acceso a datos de la tabla suscripciones (historial de pagos por negocio)
+// Acceso a datos de la tabla suscripciones (historial de periodos y pagos por negocio)
 public interface SuscripcionRepository extends JpaRepository<Suscripcion, Long> {
 
     /**
@@ -26,29 +27,13 @@ public interface SuscripcionRepository extends JpaRepository<Suscripcion, Long> 
     List<Suscripcion> listarPorNegocio(@Param("idNegocio") Long idNegocio);
 
     /**
-     * Obtiene el periodo VIGENTE actual de un negocio (el más reciente por fecha de inicio).
-     * Se usa para saber si el negocio está al corriente o para confirmar su pago.
+     * Los periodos que DAN ACCESO a un negocio: la prueba y los pagados (los cancelados no cuentan).
+     * Con ellos se calcula hasta cuándo tiene acceso (ver AccesoNegocioCalculator).
      */
     @Query("""
         SELECT s FROM Suscripcion s
-        JOIN FETCH s.plan
         WHERE s.negocio.idNegocio = :idNegocio
-        ORDER BY s.fechaInicio DESC
-        LIMIT 1
+          AND s.estatus IN ('prueba', 'pagada')
         """)
-    Optional<Suscripcion> buscarPeriodoVigente(@Param("idNegocio") Long idNegocio);
-
-    /**
-     * Lista los periodos vencidos (fecha_vencimiento ya pasó) que siguen marcados
-     * como 'pendiente' (nunca se pagaron). Útil para un reporte de negocios morosos.
-     */
-    @Query("""
-        SELECT s FROM Suscripcion s
-        JOIN FETCH s.negocio
-        JOIN FETCH s.plan
-        WHERE s.estatus = 'pendiente'
-          AND s.fechaVencimiento < :hoy
-        ORDER BY s.fechaVencimiento ASC
-        """)
-    List<Suscripcion> listarVencidasPendientes(@Param("hoy") LocalDate hoy);
+    List<Suscripcion> listarPeriodosConAcceso(@Param("idNegocio") Long idNegocio);
 }

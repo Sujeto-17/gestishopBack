@@ -19,6 +19,11 @@ public class CatModulo {
     @Column(name = "id_modulo")
     private Long idModulo;
 
+    // Identificador ESTABLE del módulo para el código (token, guards, @PreAuthorize, sidebar). ej. "productos".
+    // Nunca cambia (updatable = false): el nombre sí se puede editar sin romper permisos ni menús.
+    @Column(name = "clave", nullable = false, unique = true, updatable = false, length = 40)
+    private String clave;
+
     @Column(name = "nombre", nullable = false, unique = true, length = 60)
     private String nombre;
 

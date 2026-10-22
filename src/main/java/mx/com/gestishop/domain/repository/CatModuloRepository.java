@@ -24,4 +24,13 @@ public interface CatModuloRepository extends JpaRepository<CatModulo, Long> {
 
     @Query("SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END FROM CatModulo m WHERE m.nombre = :nombre")
     boolean existeNombre(@Param("nombre") String nombre);
+
+    // ¿Ya hay un módulo con esa clave? (la clave es única)
+    @Query("SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END FROM CatModulo m WHERE m.clave = :clave")
+    boolean existeClave(@Param("clave") String clave);
+
+    // ¿Otro módulo (distinto al indicado) ya usa ese nombre? Se usa al renombrar
+    @Query("SELECT CASE WHEN COUNT(m) > 0 THEN true ELSE false END FROM CatModulo m WHERE m.nombre = :nombre AND m.idModulo <> :idModulo")
+    boolean existeNombreEnOtro(@Param("idModulo") Long idModulo, @Param("nombre") String nombre);
 }
+

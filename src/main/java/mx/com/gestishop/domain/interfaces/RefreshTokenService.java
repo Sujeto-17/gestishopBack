@@ -3,6 +3,8 @@ package mx.com.gestishop.domain.interfaces;
 import mx.com.gestishop.application.dto.response.LoginResponseDTO;
 import mx.com.gestishop.domain.model.Usuario;
 
+import java.util.UUID;
+
 /**
  * Contrato para el manejo del ciclo de vida de las sesiones (refresh tokens):
  * creación, rotación (renovar el access token) y revocación (logout, cambio
@@ -28,4 +30,19 @@ public interface RefreshTokenService {
 
     // Revoca todas las sesiones activas de un usuario (cambio de password, robo detectado)
     void revocarTodasDelUsuario(Long idUsuario);
+
+    /**
+     * Igual que crear(), pero guardando el negocio con el que el ADMIN está trabajando en esta sesión,
+     * para conservarlo cuando el access token se renueve. Para los demás usuarios se pasa null.
+     */
+    String crear(Usuario usuario, String ip, String userAgent, Long idNegocioActivo);
+
+    /**
+     * Cambia el negocio activo de un administrador: valida que el negocio sea suyo y esté vigente,
+     * revoca el refresh token enviado (rotación) y devuelve un par de tokens nuevo con los módulos
+     * de ese negocio.
+     *
+     * @param uuidUsuario usuario autenticado (del access token): el refresh token debe ser de esa misma cuenta
+     */
+    LoginResponseDTO cambiarNegocio(String refreshTokenPlano, UUID uuidUsuario, Long idNegocio);
 }

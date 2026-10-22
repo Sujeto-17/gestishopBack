@@ -42,6 +42,26 @@ public class Negocio {
     @Column(name = "direccion", length = 200)
     private String direccion;
 
+    // --- Datos de facturación (todos opcionales; van completos o no va ninguno) ---
+    @Column(name = "razon_social", length = 150)
+    private String razonSocial;
+
+    @Column(name = "rfc", length = 13)
+    private String rfc;
+
+    @Column(name = "regimen_fiscal", length = 3)
+    private String regimenFiscal;  // clave SAT de 3 dígitos, ej. 601, 612, 626
+
+    @Column(name = "codigo_postal_fiscal", length = 5)
+    private String codigoPostalFiscal;
+
+    @Column(name = "correo_facturacion", length = 150)
+    private String correoFacturacion;
+
+    // Notas privadas del superadmin (acuerdos de pago, contacto...). Nunca se muestran al negocio.
+    @Column(name = "notas_internas", length = 300)
+    private String notasInternas;
+
     @Column(name = "estatus", nullable = false, length = 20)
     private String estatus;  // activo | prueba | inactivo
 
@@ -55,6 +75,11 @@ public class Negocio {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_giro", nullable = false)
     private CatGiroNegocio giro;
+
+    // Municipio donde se ubica (obligatorio al registrar; nullable en BD por los negocios que ya existían)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_municipio")
+    private CatMunicipio municipio;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "id_plan", nullable = false)

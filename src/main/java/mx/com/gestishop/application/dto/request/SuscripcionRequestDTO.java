@@ -3,6 +3,8 @@ package mx.com.gestishop.application.dto.request;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Pattern;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -19,10 +21,12 @@ import java.time.LocalDate;
 public class SuscripcionRequestDTO {
 
     @NotNull
+    @PastOrPresent(message = "La fecha de pago no puede ser futura")
     @Schema(description = "Fecha en que se recibió el pago", example = "2026-08-01")
     private LocalDate fechaPago;
 
     @NotBlank
+    @Pattern(regexp = "^(transferencia|tarjeta|efectivo|otro)$", message = "Método de pago inválido")
     @Schema(description = "Método de pago utilizado", example = "transferencia",
             allowableValues = {"transferencia", "tarjeta", "efectivo", "otro"})
     private String metodoPago;

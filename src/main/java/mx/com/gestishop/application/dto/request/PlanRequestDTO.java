@@ -32,4 +32,12 @@ public class PlanRequestDTO {
     @NotEmpty(message = "Debes seleccionar al menos un módulo")
     @Schema(description = "IDs de los módulos incluidos en este plan", example = "[1,2,3]")
     private List<Long> idModulos;
+
+    @Min(value = 1, message = "El límite de trabajadores debe ser al menos 1")
+    @Schema(description = "Máximo de trabajadores ACTIVOS que permite el plan. Vacío = sin límite", example = "5", nullable = true)
+    private Integer maxTrabajadores;
+
+    @Min(value = 1, message = "El límite de administradores debe ser al menos 1")
+    @Schema(description = "Máximo de administradores ACTIVOS por negocio que permite el plan. Vacío = sin límite", example = "2", nullable = true)
+    private Integer maxAdministradores;
 }

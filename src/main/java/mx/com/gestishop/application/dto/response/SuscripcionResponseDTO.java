@@ -32,14 +32,14 @@ public class SuscripcionResponseDTO {
     @Schema(description = "Vencimiento del periodo")
     private LocalDate fechaVencimiento;
 
-    @Schema(description = "Fecha en que se registró el pago, null si sigue pendiente", nullable = true)
+    @Schema(description = "Fecha en que se registró el pago, null en el periodo de prueba", nullable = true)
     private LocalDate fechaPago;
 
     @Schema(description = "Método de pago utilizado", nullable = true)
     private String metodoPago;
 
     @Schema(description = "Estatus del periodo", example = "pagada",
-            allowableValues = {"pagada", "pendiente", "vencida", "cancelada"})
+            allowableValues = {"prueba", "pagada", "cancelada"})
     private String estatus;
 
     @Schema(nullable = true)

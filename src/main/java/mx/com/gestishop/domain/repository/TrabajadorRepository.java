@@ -26,19 +26,55 @@ public interface TrabajadorRepository extends JpaRepository<Trabajador, Long> {
 
     // Busca un trabajador por el identificador público (UUID) de su usuario asociado
     @Query("""
-        SELECT t FROM Trabajador t
-        JOIN FETCH t.usuario u
-        WHERE u.uuidUsuario = :uuidUsuario
-        """)
+    SELECT t FROM Trabajador t
+    JOIN FETCH t.usuario u
+    LEFT JOIN FETCH t.genero
+    LEFT JOIN FETCH t.estadoCivil
+    LEFT JOIN FETCH t.municipio
+    WHERE u.uuidUsuario = :uuidUsuario
+    """)
     Optional<Trabajador> buscarPorUuidUsuario(@Param("uuidUsuario") UUID uuidUsuario);
+
+    @Query("""
+    SELECT t FROM Trabajador t
+    JOIN FETCH t.usuario u
+    LEFT JOIN FETCH t.genero
+    LEFT JOIN FETCH t.estadoCivil
+    LEFT JOIN FETCH t.municipio
+    WHERE u.uuidUsuario = :uuidUsuario
+      AND t.negocio.idNegocio = :idNegocio
+    """)
+    Optional<Trabajador> buscarPorUuidUsuarioYNegocio(@Param("uuidUsuario") UUID uuidUsuario,
+                                                      @Param("idNegocio") Long idNegocio);
 
     // Lista todos los trabajadores activos de un negocio, con su Usuario ya cargado
     @Query("""
-        SELECT t FROM Trabajador t
-        JOIN FETCH t.usuario u
-        WHERE t.negocio.idNegocio = :idNegocio
-          AND u.deletedAt IS NULL
-        ORDER BY u.nombre ASC
-        """)
+    SELECT t FROM Trabajador t
+    JOIN FETCH t.usuario u
+    LEFT JOIN FETCH t.genero
+    LEFT JOIN FETCH t.estadoCivil
+    LEFT JOIN FETCH t.municipio
+    WHERE t.negocio.idNegocio = :idNegocio
+      AND u.deletedAt IS NULL
+    ORDER BY u.nombre ASC
+    """)
     List<Trabajador> listarPorNegocio(@Param("idNegocio") Long idNegocio);
+
+    // Cuántos trabajadores ACTIVOS tiene un negocio (para el límite del plan)
+    @Query("""
+            SELECT COUNT(t) FROM Trabajador t
+            WHERE t.negocio.idNegocio = :idNegocio
+              AND t.usuario.estatus = 'activo'
+              AND t.usuario.deletedAt IS NULL
+            """)
+    long contarActivosPorNegocio(@Param("idNegocio") Long idNegocio);
+
+    // Lo mismo para TODOS los negocios en una sola consulta: filas [idNegocio, cantidad] (para el listado del superadmin)
+    @Query("""
+            SELECT t.negocio.idNegocio, COUNT(t) FROM Trabajador t
+            WHERE t.usuario.estatus = 'activo'
+              AND t.usuario.deletedAt IS NULL
+            GROUP BY t.negocio.idNegocio
+            """)
+    List<Object[]> contarActivosAgrupados();
 }

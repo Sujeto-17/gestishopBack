@@ -1,8 +1,11 @@
 package mx.com.gestishop.domain.interfaces;
 
+import mx.com.gestishop.application.dto.request.CambiarNegocioRequestDTO;
 import mx.com.gestishop.application.dto.request.CambiarPasswordRequestDTO;
 import mx.com.gestishop.application.dto.request.LoginRequestDTO;
 import mx.com.gestishop.application.dto.response.LoginResponseDTO;
+
+import java.util.UUID;
 
 public interface AuthService {
 
@@ -36,4 +39,10 @@ public interface AuthService {
      * medida de seguridad (por si el cambio se debe a una sospecha de robo).
      */
     void cambiarPassword(CambiarPasswordRequestDTO dto);
+
+    /**
+     * Cambia el negocio con el que trabaja un administrador que tiene varios (dueño con sucursales).
+     * Devuelve tokens nuevos con los módulos del negocio elegido.
+     */
+    LoginResponseDTO cambiarNegocio(UUID uuidUsuario, CambiarNegocioRequestDTO dto);
 }

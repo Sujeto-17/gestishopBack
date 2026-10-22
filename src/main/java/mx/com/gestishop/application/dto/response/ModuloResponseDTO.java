@@ -35,4 +35,7 @@ public class ModuloResponseDTO {
 
     @Schema(description = "Estatus del módulo", example = "activo")
     private String estatus;
+
+    @Schema(description = "Clave estable del módulo, la que usa el código (no cambia al renombrar)", example = "pedidos")
+    private String clave;
 }

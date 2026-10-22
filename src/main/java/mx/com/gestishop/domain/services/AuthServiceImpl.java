@@ -2,9 +2,11 @@ package mx.com.gestishop.domain.services;
 
 import lombok.RequiredArgsConstructor;
 import mx.com.gestishop.application.dto.ContextoSesionDTO;
+import mx.com.gestishop.application.dto.request.CambiarNegocioRequestDTO;
 import mx.com.gestishop.application.dto.request.CambiarPasswordRequestDTO;
 import mx.com.gestishop.application.dto.request.LoginRequestDTO;
 import mx.com.gestishop.application.dto.response.LoginResponseDTO;
+import mx.com.gestishop.application.mapper.SesionMapper;
 import mx.com.gestishop.core.enums.ApiCodeResponse;
 import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.exception.RepositoryExecutor;
@@ -19,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.OffsetDateTime;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Implementación del servicio de autenticación.
@@ -48,7 +51,7 @@ public class AuthServiceImpl implements AuthService {
     private static final int VENTANA_MINUTOS = 15;
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = ApiResponseException.class)
     public LoginResponseDTO login(LoginRequestDTO dto, String ip, String userAgent) {
 
         // Verificar que el correo no esté bloqueado por demasiados intentos fallidos recientes
@@ -89,22 +92,12 @@ public class AuthServiceImpl implements AuthService {
         // Emitir el access token (JWT corto) y el refresh token (opaco, revocable, largo)
         String accessToken = jwtTokenProvider.generarAccessToken(
                 usuario, contexto.getIdNegocio(), contexto.getNivelAcceso(), contexto.getModulos());
-        String refreshToken = refreshTokenService.crear(usuario, ip, userAgent);
+        String refreshToken = refreshTokenService.crear(usuario, ip, userAgent, negocioActivoDeSesion(usuario, contexto));
 
-        return LoginResponseDTO.builder()
-                .uuidUsuario(usuario.getUuidUsuario())
-                .accessToken(accessToken)
-                .refreshToken(refreshToken)
-                .debeActualizarPassword(usuario.getDebeActualizarPassword())
-                .tipoUsuario(usuario.getTipoUsuario())
-                .nivelAcceso(contexto.getNivelAcceso())
-                .idNegocio(contexto.getIdNegocio())
-                .modulos(contexto.getModulos())
-                .build();
+        return SesionMapper.toLoginResponse(usuario, contexto, accessToken, refreshToken);
     }
 
     @Override
-    @Transactional
     public LoginResponseDTO refrescarToken(String refreshTokenPlano) {
         return refreshTokenService.rotar(refreshTokenPlano);
     }
@@ -175,5 +168,20 @@ public class AuthServiceImpl implements AuthService {
                 ),
                 "IntentoLogin", "registrar"
         );
+    }
+
+    /**
+     * Cambia el negocio con el que trabaja un administrador con varios negocios.
+     * La validación y la rotación del refresh token viven en RefreshTokenService (sin @Transactional
+     * aquí, igual que refrescarToken, para que sus propias reglas de rollback apliquen).
+     */
+    @Override
+    public LoginResponseDTO cambiarNegocio(UUID uuidUsuario, CambiarNegocioRequestDTO dto) {
+        return refreshTokenService.cambiarNegocio(dto.getRefreshToken(), uuidUsuario, dto.getIdNegocio());
+    }
+
+    // Solo el ADMIN guarda negocio activo en su sesión; para los demás tipos no aplica (null)
+    private Long negocioActivoDeSesion(Usuario usuario, ContextoSesionDTO contexto) {
+        return "admin".equals(usuario.getTipoUsuario()) ? contexto.getIdNegocio() : null;
     }
 }

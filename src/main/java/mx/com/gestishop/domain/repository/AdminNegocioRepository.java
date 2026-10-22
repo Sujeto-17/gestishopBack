@@ -77,4 +77,59 @@ public interface AdminNegocioRepository extends JpaRepository<AdminNegocio, Long
         ORDER BY u.nombre ASC
         """)
     List<AdminNegocio> listarTodos();
+
+    /**
+     * Todos los negocios de un admin, con el negocio y su plan ya cargados (JOIN FETCH), sin los negocios
+     * borrados. Es la base del selector de negocio del login y de las reglas del "último admin".
+     */
+    @Query("""
+            SELECT an FROM AdminNegocio an
+            JOIN FETCH an.negocio n
+            JOIN FETCH n.plan
+            WHERE an.usuario.idUsuario = :idUsuario
+              AND n.deletedAt IS NULL
+            ORDER BY an.createdAt ASC
+            """)
+    List<AdminNegocio> buscarPorUsuarioConNegocio(@Param("idUsuario") Long idUsuario);
+
+    /**
+     * Cuenta los OTROS administradores activos de un negocio (sin contar al indicado).
+     * Si da 0, el admin indicado es el único activo: no se debe desactivar ni desvincular.
+     */
+    @Query("""
+            SELECT COUNT(an) FROM AdminNegocio an
+            WHERE an.negocio.idNegocio = :idNegocio
+              AND an.usuario.idUsuario <> :idUsuario
+              AND an.usuario.estatus = 'activo'
+              AND an.usuario.deletedAt IS NULL
+            """)
+    long contarOtrosAdminsActivos(@Param("idNegocio") Long idNegocio, @Param("idUsuario") Long idUsuario);
+
+    // La relación de UN admin con UN negocio concreto (para desvincularlo), con usuario y negocio cargados
+    @Query("""
+            SELECT an FROM AdminNegocio an
+            JOIN FETCH an.usuario u
+            JOIN FETCH an.negocio n
+            WHERE u.uuidUsuario = :uuidUsuario
+              AND n.idNegocio = :idNegocio
+            """)
+    Optional<AdminNegocio> buscarRelacion(@Param("uuidUsuario") UUID uuidUsuario, @Param("idNegocio") Long idNegocio);
+
+    // Cuántos administradores ACTIVOS tiene un negocio (para el límite del plan y el aviso "sin administrador")
+    @Query("""
+            SELECT COUNT(an) FROM AdminNegocio an
+            WHERE an.negocio.idNegocio = :idNegocio
+              AND an.usuario.estatus = 'activo'
+              AND an.usuario.deletedAt IS NULL
+            """)
+    long contarAdminsActivos(@Param("idNegocio") Long idNegocio);
+
+    // Lo mismo para TODOS los negocios en una sola consulta: filas [idNegocio, cantidad]
+    @Query("""
+            SELECT an.negocio.idNegocio, COUNT(an) FROM AdminNegocio an
+            WHERE an.usuario.estatus = 'activo'
+              AND an.usuario.deletedAt IS NULL
+            GROUP BY an.negocio.idNegocio
+            """)
+    List<Object[]> contarAdminsActivosAgrupados();
 }

@@ -36,12 +36,6 @@ public class Usuario {
     @Column(name = "telefono", length = 15)
     private String telefono;
 
-    @Column(name = "direccion", length = 200)
-    private String direccion;
-
-    @Column(name = "fecha_nacimiento")
-    private LocalDate fechaNacimiento;
-
     @Column(name = "password_hash", nullable = false, length = 255)
     private String passwordHash;  // ALWAYS encrypted with BCrypt, never plain text
 
@@ -56,19 +50,6 @@ public class Usuario {
 
     @Column(name = "fecha_alta", nullable = false)
     private LocalDate fechaAlta;
-
-    // --- LIST OF TABLES ---
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_genero")
-    private CatGenero genero;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_estado_civil")
-    private CatEstadoCivil estadoCivil;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "id_municipio")
-    private CatMunicipio municipio;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private OffsetDateTime createdAt;

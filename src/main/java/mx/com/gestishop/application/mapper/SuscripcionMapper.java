@@ -6,6 +6,7 @@ import mx.com.gestishop.domain.model.Negocio;
 import mx.com.gestishop.domain.model.Plan;
 import mx.com.gestishop.domain.model.Suscripcion;
 
+import java.math.BigDecimal;
 import java.time.LocalDate;
 
 /**
@@ -16,13 +17,16 @@ import java.time.LocalDate;
 public class SuscripcionMapper {
 
     private static final int DIAS_PRUEBA = 15;
+    // Duración de un periodo pagado, en días
+    public static final int DIAS_PERIODO = 30;
 
     private SuscripcionMapper() {
     }
 
     /**
-     * Construye la primera suscripción de un negocio recién creado, en
-     * estatus 'pendiente' (aún no se ha cobrado, es periodo de prueba).
+     * Construye la primera suscripción de un negocio recién creado, en estatus 'prueba'.
+     * El periodo de prueba NO se cobra: va con precio 0 y no cuenta como pendiente de pago
+     * (antes quedaba 'pendiente' con el precio del plan y aparecía como moroso al terminar).
      * Las fechas coinciden exactamente con negocio.fechaAlta/vencimiento,
      * calculadas en NegocioMapper, para no duplicar esa lógica en dos lugares.
      */
@@ -30,26 +34,32 @@ public class SuscripcionMapper {
         return Suscripcion.builder()
                 .negocio(negocio)
                 .plan(plan)
-                .precio(plan.getPrecio())
+                .precio(BigDecimal.ZERO)
                 .fechaInicio(negocio.getFechaAlta())
                 .fechaVencimiento(negocio.getVencimiento())
-                .estatus("pendiente")
+                .estatus("prueba")
                 .notas("Periodo de prueba inicial de " + DIAS_PRUEBA + " días")
                 .build();
     }
 
     /**
-     * Construye el siguiente periodo al renovar: 30 días de vigencia a partir
-     * de hoy (o desde el vencimiento anterior si aún no vence, para no perder días).
+     * Construye un periodo YA PAGADO de 30 días a partir de la fecha de inicio indicada.
+     * El precio es el del plan en este momento y queda guardado en el periodo: si el plan sube de precio
+     * después, este historial no cambia. (Antes existía un periodo 'pendiente' que se creaba al renovar
+     * y se cobraba aparte; ahora todo periodo nace pagado.)
      */
-    public static Suscripcion crearRenovacion(Negocio negocio, Plan plan, LocalDate fechaInicio) {
+    public static Suscripcion crearPeriodoPagado(Negocio negocio, Plan plan, LocalDate fechaInicio,
+                                                 LocalDate fechaPago, String metodoPago, String notas) {
         return Suscripcion.builder()
                 .negocio(negocio)
                 .plan(plan)
                 .precio(plan.getPrecio())
                 .fechaInicio(fechaInicio)
-                .fechaVencimiento(fechaInicio.plusDays(30))
-                .estatus("pendiente")
+                .fechaVencimiento(fechaInicio.plusDays(DIAS_PERIODO))
+                .fechaPago(fechaPago)
+                .metodoPago(metodoPago)
+                .estatus("pagada")
+                .notas(notas)
                 .build();
     }
 

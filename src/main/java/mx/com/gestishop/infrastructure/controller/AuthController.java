@@ -6,14 +6,19 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import mx.com.gestishop.application.dto.request.CambiarNegocioRequestDTO;
 import mx.com.gestishop.application.dto.request.CambiarPasswordRequestDTO;
 import mx.com.gestishop.application.dto.request.LoginRequestDTO;
 import mx.com.gestishop.application.dto.request.RefreshTokenRequestDTO;
 import mx.com.gestishop.application.dto.response.LoginResponseDTO;
 import mx.com.gestishop.core.dto.ApiDataResponseDTO;
+import mx.com.gestishop.core.enums.ApiCodeResponse;
+import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.generic.BaseController;
 import mx.com.gestishop.domain.interfaces.AuthService;
+import mx.com.gestishop.infrastructure.config.SesionActual;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 // Controlador de autenticación
@@ -24,6 +29,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController extends BaseController {
 
     private final AuthService authService;
+    private final SesionActual sesionActual;  // quién es el usuario autenticado (viene del token)
 
     @Operation(summary = "Iniciar sesión",
             description = "Valida credenciales y devuelve un par de tokens (access + refresh). " +
@@ -66,7 +72,23 @@ public class AuthController extends BaseController {
     @PostMapping("/cambiar-password")
     public ResponseEntity<ApiDataResponseDTO<Void>> cambiarPassword(
             @Valid @RequestBody CambiarPasswordRequestDTO dto) {
+        // Solo se puede cambiar la contraseña de la PROPIA cuenta: el uuid del body debe coincidir
+        // con el del token. Antes el uuid del body mandaba, y el endpoint era público.
+        if (!sesionActual.uuidUsuario().equals(dto.getUuidUsuario())) {
+            throw new ApiResponseException(ApiCodeResponse.FORBIDDEN);
+        }
         authService.cambiarPassword(dto);
         return ok();
+    }
+
+    @Operation(summary = "Cambiar de negocio",
+            description = "Solo administradores con más de un negocio (dueño con sucursales). Valida que el negocio sea suyo " +
+                    "y esté vigente, y devuelve un par de tokens nuevo con los módulos de ese negocio. " +
+                    "El refresh token enviado se revoca (rotación).")
+    @PreAuthorize("hasRole('ADMIN')")
+    @PostMapping("/negocio-activo")
+    public ResponseEntity<ApiDataResponseDTO<LoginResponseDTO>> cambiarNegocio(
+            @Valid @RequestBody CambiarNegocioRequestDTO dto) {
+        return ok(authService.cambiarNegocio(sesionActual.uuidUsuario(), dto));
     }
 }

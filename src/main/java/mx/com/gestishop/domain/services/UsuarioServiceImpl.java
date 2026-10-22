@@ -33,6 +33,7 @@ public class UsuarioServiceImpl implements UsuarioService {
     private final AdminNegocioRepository adminNegocioRepository;
     private final NegocioRepository negocioRepository;
     private final PasswordEncoder passwordEncoder;
+    private final PlanLimites planLimites;   // límites del plan (cuántos administradores caben)
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -62,6 +63,11 @@ public class UsuarioServiceImpl implements UsuarioService {
                                     Map.of("detalle", "El negocio indicado no existe."))),
                     "Negocio", "consultar"
             );
+        }
+
+        // El plan del negocio puede limitar cuántos administradores activos tiene
+        if (negocio != null && "admin".equals(dto.getTipoUsuario())) {
+            planLimites.validarAgregarAdministrador(negocio);
         }
 
         // Construir la entidad Usuario. La contraseña se encripta aquí,

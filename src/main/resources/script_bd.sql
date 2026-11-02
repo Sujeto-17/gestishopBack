@@ -107,7 +107,7 @@ CREATE TABLE planes (
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
 COMMENT ON TABLE planes IS
-  'Catálogo de planes de suscripción que el superadmin ofrece. sistema_type define el flujo operativo: "servicio" (trabajo con proceso/seguimiento, ej. imprenta, barbería) o "tienda" (venta directa, ej. farmacia, papelería). No es el giro del negocio, es el tipo de flujo técnico.';
+  'Catálogo FIJO de planes (basico / pro / elite) que el superadmin ofrece, con precio, módulos incluidos y límites de trabajadores y administradores. El tipo de flujo (servicio / tienda) es del negocio (negocios.sistema_type), no del plan.';
 
 CREATE UNIQUE INDEX ux_planes_uuid ON planes(uuid_plan);
 
@@ -254,6 +254,50 @@ CREATE INDEX ix_admin_negocio_negocio ON admin_negocio(id_negocio);
 CREATE INDEX ix_admin_negocio_usuario ON admin_negocio(id_usuario);
 
 -- ============================================================
+-- BLOQUE 8B: HORARIOS (módulo Horarios)
+-- ============================================================
+
+-- btree_gist permite la restricción de "sin traslape de fechas" por trabajador
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+-- Tolerancia de retardo (minutos). Catálogo general y oficial: no lo edita nadie desde la app.
+CREATE TABLE cat_tolerancias (
+    id_tolerancia BIGSERIAL PRIMARY KEY,
+    minutos       SMALLINT    NOT NULL UNIQUE CHECK (minutos BETWEEN 0 AND 120),
+    nombre        VARCHAR(30) NOT NULL UNIQUE      -- 'Sin tolerancia', '15 minutos'...
+);
+COMMENT ON TABLE cat_tolerancias IS
+  'Minutos de gracia antes de contar un retardo. 0 = sin tolerancia. Se asigna a cada trabajador.';
+
+CREATE TABLE horarios (
+    id_horario    BIGSERIAL PRIMARY KEY,
+    uuid_horario  UUID         NOT NULL DEFAULT gen_random_uuid(),   -- ID público para la API
+    id_negocio    BIGINT REFERENCES negocios(id_negocio),            -- NULL = horario global
+    nombre        VARCHAR(80)  NOT NULL,
+    estatus       VARCHAR(20)  NOT NULL DEFAULT 'activo'
+                  CHECK (estatus IN ('activo','inactivo')),
+    created_at    TIMESTAMPTZ  NOT NULL DEFAULT now(),
+    updated_at    TIMESTAMPTZ  NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX ux_horarios_uuid   ON horarios(uuid_horario);
+CREATE UNIQUE INDEX ux_horarios_nombre ON horarios (COALESCE(id_negocio, 0), lower(nombre));
+CREATE INDEX ix_horarios_negocio ON horarios(id_negocio);
+COMMENT ON TABLE horarios IS
+  'id_negocio NULL = horario global (inmutable). Con valor = horario propio del negocio. Evitar horarios repetidos se valida en el backend.';
+
+CREATE TABLE horario_dias (
+    id_horario_dia BIGSERIAL PRIMARY KEY,
+    id_horario     BIGINT   NOT NULL REFERENCES horarios(id_horario) ON DELETE CASCADE,
+    dia_semana     SMALLINT NOT NULL CHECK (dia_semana BETWEEN 1 AND 7),   -- ISO: 1 = lunes ... 7 = domingo
+    hora_entrada   TIME     NOT NULL,
+    hora_salida    TIME     NOT NULL,
+    CONSTRAINT uq_horario_dias UNIQUE (id_horario, dia_semana),
+    CONSTRAINT ck_horario_dias_horas CHECK (hora_entrada <> hora_salida)
+);
+COMMENT ON TABLE horario_dias IS
+  'Un día sin fila es día de descanso. Si hora_salida <= hora_entrada el turno cruza medianoche y cuenta para el día en que empieza.';
+
+-- ============================================================
 -- BLOQUE 8: TRABAJADORES
 -- ============================================================
 -- Extiende usuarios con los datos laborales. Cada trabajador
@@ -280,10 +324,9 @@ CREATE TABLE trabajadores (
 
     -- Datos laborales
     puesto          VARCHAR(100) NOT NULL,
-    rol             VARCHAR(20)  NOT NULL,                  -- texto libre: qué hace en ese negocio
+    id_tolerancia   BIGINT NOT NULL REFERENCES cat_tolerancias(id_tolerancia),  -- minutos de gracia para retardo; propia de cada trabajador
     nivel_acceso    VARCHAR(20)  NOT NULL DEFAULT 'estandar'
                     CHECK (nivel_acceso IN ('gerente','estandar')),   -- controla qué módulos ve
-    turno           VARCHAR(20)  NOT NULL CHECK (turno IN ('mañana','tarde','completo')),
     tipo_contrato   VARCHAR(20)  NOT NULL,                  -- texto libre
     fecha_ingreso   DATE         NOT NULL DEFAULT CURRENT_DATE,
     notas           VARCHAR(300),
@@ -326,9 +369,27 @@ CREATE TABLE trabajadores (
 );
 
 CREATE INDEX ix_trabajadores_negocio ON trabajadores(id_negocio);
+CREATE INDEX ix_trabajadores_tolerancia ON trabajadores(id_tolerancia);
 
 COMMENT ON TABLE trabajadores IS
-  'rol = qué hace (texto libre). nivel_acceso = qué módulos ve. regimen = con o sin nómina formal. Son conceptos independientes.';
+  'nivel_acceso = qué módulos ve. regimen = con o sin nómina formal. El horario vive en trabajador_horarios; la tolerancia de retardo es del propio trabajador. Son conceptos independientes.';
+
+CREATE TABLE trabajador_horarios (
+    id_trabajador_horario BIGSERIAL PRIMARY KEY,
+    id_trabajador   BIGINT NOT NULL REFERENCES trabajadores(id_trabajador),
+    id_horario      BIGINT NOT NULL REFERENCES horarios(id_horario),
+    vigente_desde   DATE   NOT NULL,
+    vigente_hasta   DATE,                                   -- NULL = sigue vigente
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT ck_trabajador_horarios_fechas CHECK (vigente_hasta IS NULL OR vigente_hasta >= vigente_desde),
+    -- un trabajador no puede tener dos horarios en la misma fecha (cubre también "solo uno abierto")
+    CONSTRAINT ex_trabajador_horarios_sin_traslape EXCLUDE USING gist (
+        id_trabajador WITH =,
+        daterange(vigente_desde, vigente_hasta, '[]') WITH &&)
+);
+CREATE INDEX ix_trabajador_horarios_horario ON trabajador_horarios(id_horario);
+COMMENT ON TABLE trabajador_horarios IS
+  'Historial de horarios por trabajador. Para cambiar: cerrar el vigente (vigente_hasta = día anterior) y abrir uno nuevo. El horario de una fecha es el que la contiene. La tolerancia NO va aquí: es del trabajador.';
 
 -- ============================================================
 -- BLOQUE 9: ROL_MODULOS (permisos data-driven)
@@ -456,26 +517,28 @@ INSERT INTO cat_modulos (clave, nombre, descripcion, icono, ruta, orden) VALUES
   ('proveedores', 'Proveedores',    'Contactos y condiciones de compra a proveedores',                     'truck',            '/proveedores',    8),
   ('categorias', 'Categorías',     'Clasificación de productos o servicios',                              'tag',              '/categorias',     9),
   ('trabajadores', 'Trabajadores',   'Alta y gestión del personal del negocio',                             'user-tie',         '/trabajadores',  10),
-  ('configuracion', 'Configuración',  'Ajustes generales del negocio',                                       'sliders',          '/configuracion', 11),
-  ('justificantes', 'Justificantes',  'Solicitud y autorización de justificantes de falta',                  'file-signature',   '/justificantes', 12),
-  ('vacaciones', 'Vacaciones',     'Solicitud y control de días de vacaciones',                           'umbrella-beach',   '/vacaciones',    13),
-  ('solicitudes', 'Solicitudes',    'Permisos especiales: home office, licencia médica, etc.',             'inbox',            '/solicitudes',   14),
-  ('citas', 'Citas',          'Agenda de citas con clientes (negocios tipo servicio)',               'calendar-check',   '/citas',         15),
-  ('reportes', 'Reportes',       'Reportes y estadísticas del negocio',                                 'chart-line',       '/reportes',      16),
-  ('perfil', 'Perfil',         'Datos personales y configuración de la propia cuenta',                'user',             '/perfil',        17);
+  ('horarios', 'Horarios',        'Horarios de trabajo del personal: días, entradas, salidas y tolerancia', 'clock',            '/horarios',      11),
+  ('configuracion', 'Configuración',  'Ajustes generales del negocio',                                       'sliders',          '/configuracion', 12),
+  ('justificantes', 'Justificantes',  'Solicitud y autorización de justificantes de falta',                  'file-signature',   '/justificantes', 13),
+  ('vacaciones', 'Vacaciones',     'Solicitud y control de días de vacaciones',                           'umbrella-beach',   '/vacaciones',    14),
+  ('solicitudes', 'Solicitudes',    'Permisos especiales: home office, licencia médica, etc.',             'inbox',            '/solicitudes',   15),
+  ('citas', 'Citas',          'Agenda de citas con clientes (negocios tipo servicio)',               'calendar-check',   '/citas',         16),
+  ('reportes', 'Reportes',       'Reportes y estadísticas del negocio',                                 'chart-line',       '/reportes',      17),
+  ('perfil', 'Perfil',         'Datos personales y configuración de la propia cuenta',                'user',             '/perfil',        18);
 
 -- Giros de negocio de ejemplo
 INSERT INTO cat_giros_negocio (nombre, icono, orden) VALUES
-  ('Restaurantes / comida',   'utensils',        1),
-  ('Tiendas de ropa',         'shirt',           2),
-  ('Imprentas',               'print',           3),
-  ('Tiendas de tecnología',   'laptop',          4),
-  ('Abarrotes / minisuper',   'basket-shopping', 5),
-  ('Barberías / estéticas',   'scissors',        6),
-  ('Farmacias',               'pills',           7),
-  ('Papelerías',              'pencil',          8),
-  ('Negocios de servicios',   'briefcase',       9),
-  ('Otro comercio',           'store',          99);
+  ('Distribuidor de Materiales',   'dolly',           1),
+  ('Restaurantes / comida',        'utensils',        2),
+  ('Tiendas de ropa',              'shirt',           3),
+  ('Imprentas',                    'print',           4),
+  ('Tiendas de tecnología',        'laptop',          5),
+  ('Abarrotes / minisuper',        'basket-shopping', 6),
+  ('Barberías / estéticas',        'scissors',        7),
+  ('Farmacias',                    'pills',           8),
+  ('Papelerías',                   'pencil',          9),
+  ('Negocios de servicios',        'briefcase',       10),
+  ('Otro comercio',                'store',          99);
 
 -- GERENTE: control operativo amplio, sin ver costos/proveedores/config
 INSERT INTO rol_modulos (tipo_usuario, nivel_acceso, id_modulo)
@@ -521,3 +584,121 @@ INSERT INTO cat_generos (nombre) VALUES ('Hombre'), ('Mujer'), ('Otro');
 
 INSERT INTO cat_estados_civiles (nombre) VALUES
   ('Soltero(a)'), ('Casado(a)'), ('Unión libre'), ('Divorciado(a)'), ('Viudo(a)');
+
+  -- ------------------------------------------------------------
+  -- SEED: tolerancias generales y horarios globales (lunes a viernes)
+  -- ------------------------------------------------------------
+  INSERT INTO cat_tolerancias (minutos, nombre) VALUES
+    (0,  'Sin tolerancia'),
+    (5,  '5 minutos'),
+    (10, '10 minutos'),
+    (15, '15 minutos'),
+    (20, '20 minutos'),
+    (25, '25 minutos'),
+    (30, '30 minutos');
+
+  INSERT INTO horarios (nombre) VALUES
+    ('Lunes a viernes 08:00 - 16:00'),
+    ('Lunes a viernes 09:00 - 17:00'),
+    ('Lunes a viernes 08:00 - 17:00'),
+    ('Lunes a viernes 09:00 - 18:00'),
+    ('Nocturno lunes a viernes 22:00 - 06:00');
+
+  INSERT INTO horario_dias (id_horario, dia_semana, hora_entrada, hora_salida)
+  SELECT h.id_horario, d.dia, v.entrada, v.salida
+  FROM horarios h
+  JOIN (VALUES
+    ('Lunes a viernes 08:00 - 16:00',          TIME '08:00', TIME '16:00'),
+    ('Lunes a viernes 09:00 - 17:00',          TIME '09:00', TIME '17:00'),
+    ('Lunes a viernes 08:00 - 17:00',          TIME '08:00', TIME '17:00'),
+    ('Lunes a viernes 09:00 - 18:00',          TIME '09:00', TIME '18:00'),
+    ('Nocturno lunes a viernes 22:00 - 06:00', TIME '22:00', TIME '06:00')
+  ) AS v(nombre, entrada, salida) ON v.nombre = h.nombre
+  CROSS JOIN generate_series(1, 5) AS d(dia);
+
+-- ------------------------------------------------------------
+-- TRIGGERS (van al FINAL, después de los seeds: los horarios globales se insertan antes de protegerlos)
+-- Protegen el historial y el aislamiento entre negocios
+-- ------------------------------------------------------------
+
+-- Horarios globales intocables; los propios se bloquean al primer uso; cancelar solo sin trabajadores vigentes
+CREATE FUNCTION fn_horarios_proteger() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF OLD.id_negocio IS NULL THEN
+        RAISE EXCEPTION 'Los horarios globales no se pueden modificar ni eliminar';
+    END IF;
+
+    IF TG_OP = 'DELETE' THEN
+        IF EXISTS (SELECT 1 FROM trabajador_horarios WHERE id_horario = OLD.id_horario) THEN
+            RAISE EXCEPTION 'El horario ya fue usado: solo se puede cancelar, no eliminar';
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    IF (NEW.nombre IS DISTINCT FROM OLD.nombre OR NEW.id_negocio IS DISTINCT FROM OLD.id_negocio)
+       AND EXISTS (SELECT 1 FROM trabajador_horarios WHERE id_horario = OLD.id_horario) THEN
+        RAISE EXCEPTION 'El horario ya fue usado: no se puede modificar, solo cancelar';
+    END IF;
+
+    IF NEW.estatus = 'inactivo' AND OLD.estatus <> 'inactivo'
+       AND EXISTS (SELECT 1 FROM trabajador_horarios
+                   WHERE id_horario = OLD.id_horario
+                     AND (vigente_hasta IS NULL OR vigente_hasta >= CURRENT_DATE)) THEN
+        RAISE EXCEPTION 'No se puede cancelar: hay trabajadores con este horario vigente';
+    END IF;
+
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER tg_horarios_proteger
+    BEFORE UPDATE OR DELETE ON horarios
+    FOR EACH ROW EXECUTE FUNCTION fn_horarios_proteger();
+
+-- Los días de un horario global o ya usado no cambian
+CREATE FUNCTION fn_horario_dias_proteger() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    v_id_horario BIGINT := CASE WHEN TG_OP = 'DELETE' THEN OLD.id_horario ELSE NEW.id_horario END;
+    v_negocio    BIGINT;
+BEGIN
+    SELECT id_negocio INTO v_negocio FROM horarios WHERE id_horario = v_id_horario;
+    IF NOT FOUND THEN
+        RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;      -- borrado en cascada: el horario ya se eliminó
+    END IF;
+
+    IF v_negocio IS NULL THEN
+        RAISE EXCEPTION 'Los horarios globales no se pueden modificar';
+    END IF;
+    IF EXISTS (SELECT 1 FROM trabajador_horarios WHERE id_horario = v_id_horario) THEN
+        RAISE EXCEPTION 'El horario ya fue usado: no se pueden cambiar sus días';
+    END IF;
+
+    RETURN CASE WHEN TG_OP = 'DELETE' THEN OLD ELSE NEW END;
+END $$;
+
+CREATE TRIGGER tg_horario_dias_proteger
+    BEFORE INSERT OR UPDATE OR DELETE ON horario_dias
+    FOR EACH ROW EXECUTE FUNCTION fn_horario_dias_proteger();
+
+-- Un trabajador solo puede usar horarios globales o de su propio negocio, y activos al asignarlos
+CREATE FUNCTION fn_trabajador_horarios_validar() RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+    v_negocio_horario BIGINT;
+    v_estatus         VARCHAR(20);
+    v_negocio_trab    BIGINT;
+BEGIN
+    SELECT id_negocio, estatus INTO v_negocio_horario, v_estatus FROM horarios WHERE id_horario = NEW.id_horario;
+    SELECT id_negocio INTO v_negocio_trab FROM trabajadores WHERE id_trabajador = NEW.id_trabajador;
+
+    IF v_negocio_horario IS NOT NULL AND v_negocio_horario <> v_negocio_trab THEN
+        RAISE EXCEPTION 'El horario pertenece a otro negocio';
+    END IF;
+    IF TG_OP = 'INSERT' AND v_estatus <> 'activo' THEN
+        RAISE EXCEPTION 'El horario está cancelado y no se puede asignar';
+    END IF;
+
+    RETURN NEW;
+END $$;
+
+CREATE TRIGGER tg_trabajador_horarios_validar
+    BEFORE INSERT OR UPDATE ON trabajador_horarios
+    FOR EACH ROW EXECUTE FUNCTION fn_trabajador_horarios_validar();

@@ -68,10 +68,6 @@ public abstract class TrabajadorBaseDTO {
     @Schema(example = "Operador de sublimación")
     private String puesto;
 
-    @NotBlank @Size(max = 20)
-    @Schema(description = "Texto libre: qué hace en este negocio", example = "Mesero")
-    private String rol;
-
     @NotBlank
     @Pattern(regexp = "^(gerente|estandar)$", message = "El nivel de acceso debe ser 'gerente' o 'estandar'")
     @Schema(allowableValues = {"gerente", "estandar"})

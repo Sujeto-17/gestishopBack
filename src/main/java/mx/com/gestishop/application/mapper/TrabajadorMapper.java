@@ -64,9 +64,7 @@ public class TrabajadorMapper {
 
         // Laborales
         t.setPuesto(dto.getPuesto());
-        t.setRol(dto.getRol());
         t.setNivelAcceso(dto.getNivelAcceso());
-        t.setTurno(dto.getTurno());
         t.setTipoContrato(dto.getTipoContrato());
         t.setNotas(dto.getNotas());
 
@@ -109,9 +107,7 @@ public class TrabajadorMapper {
                 .contactoEmergenciaTelefono(t.getContactoEmergenciaTelefono())
                 .contactoEmergenciaParentesco(t.getContactoEmergenciaParentesco())
                 .puesto(t.getPuesto())
-                .rol(t.getRol())
                 .nivelAcceso(t.getNivelAcceso())
-                .turno(t.getTurno())
                 .tipoContrato(t.getTipoContrato())
                 .fechaIngreso(t.getFechaIngreso())
                 .notas(t.getNotas())

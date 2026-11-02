@@ -67,14 +67,8 @@ public class Trabajador {
     @Column(name = "puesto", nullable = false, length = 100)
     private String puesto;
 
-    @Column(name = "rol", nullable = false, length = 20)
-    private String rol;  // texto libre: lo que hace en ese negocio
-
     @Column(name = "nivel_acceso", nullable = false, length = 20)
     private String nivelAcceso;  // gerente | estandar — controla qué módulos ve
-
-    @Column(name = "turno", nullable = false, length = 20)
-    private String turno;
 
     @Column(name = "tipo_contrato", nullable = false, length = 20)
     private String tipoContrato;  // texto libre

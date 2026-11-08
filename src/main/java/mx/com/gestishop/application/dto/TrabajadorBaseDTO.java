@@ -68,14 +68,13 @@ public abstract class TrabajadorBaseDTO {
     @Schema(example = "Operador de sublimación")
     private String puesto;
 
+    @NotNull(message = "Debes elegir la tolerancia de retardo")
+    private Long idTolerancia;
+
     @NotBlank
     @Pattern(regexp = "^(gerente|estandar)$", message = "El nivel de acceso debe ser 'gerente' o 'estandar'")
     @Schema(allowableValues = {"gerente", "estandar"})
     private String nivelAcceso;
-
-    @NotBlank
-    @Pattern(regexp = "^(mañana|tarde|completo)$", message = "El turno debe ser 'mañana', 'tarde' o 'completo'")
-    private String turno;
 
     @NotBlank @Size(max = 20)
     @Schema(description = "Texto libre", example = "Planta")

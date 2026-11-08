@@ -39,12 +39,15 @@ public class SesionMapper {
                                                    String accessToken, String refreshToken) {
         return LoginResponseDTO.builder()
                 .uuidUsuario(usuario.getUuidUsuario())
+                .nombre(usuario.getNombre())
+                .correo(usuario.getCorreo())
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .debeActualizarPassword(usuario.getDebeActualizarPassword())
                 .tipoUsuario(usuario.getTipoUsuario())
                 .nivelAcceso(contexto.getNivelAcceso())
                 .idNegocio(contexto.getIdNegocio())
+                .nombreNegocio(contexto.getNombreNegocio())
                 .modulos(contexto.getModulos())
                 .negocios(contexto.getNegocios() != null ? contexto.getNegocios() : List.of())
                 .build();

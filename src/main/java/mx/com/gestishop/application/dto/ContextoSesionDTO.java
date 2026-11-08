@@ -20,6 +20,9 @@ public class ContextoSesionDTO {
     //ID del negocio al que pertenece (null si es superadmin)
     private final Long idNegocio;
 
+    // Nombre del negocio activo, para mostrarlo en el pie de página (null si es superadmin)
+    private final String nombreNegocio;
+
     // Nivel de acceso (gerente | estandar), solo aplica si es trabajador
     private final String nivelAcceso;
 

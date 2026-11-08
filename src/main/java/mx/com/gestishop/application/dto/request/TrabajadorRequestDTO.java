@@ -1,6 +1,7 @@
 package mx.com.gestishop.application.dto.request;
 
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.*;
 import lombok.Getter;
 import lombok.Setter;
@@ -32,4 +33,9 @@ public class TrabajadorRequestDTO extends TrabajadorBaseDTO {
     @Size(min = 8)
     @Schema(description = "Contraseña generada por el sistema, se encripta antes de guardar", example = "Xk9#mPz2")
     private String password;
+
+    @Valid
+    @NotNull(message = "Debes elegir el horario inicial del trabajador")
+    @Schema(description = "Horario con el que inicia el trabajador (rige desde su fecha de ingreso si no se indica otra)")
+    private AsignarHorarioRequestDTO horario;
 }

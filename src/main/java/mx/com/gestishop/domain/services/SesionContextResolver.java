@@ -120,6 +120,7 @@ public class SesionContextResolver {
 
         return ContextoSesionDTO.builder()
                 .idNegocio(elegido.getIdNegocio())
+                .nombreNegocio(elegido.getNombre())
                 .nivelAcceso(null)  // admin no tiene nivel_acceso, ese campo es exclusivo de trabajador
                 .modulos(List.copyOf(clavesActivas(elegido.getPlan().getModulos())))
                 .negocios(negocios.stream().map(this::aNegocioSesion).toList())
@@ -153,6 +154,7 @@ public class SesionContextResolver {
 
         return ContextoSesionDTO.builder()
                 .idNegocio(negocio.getIdNegocio())
+                .nombreNegocio(negocio.getNombre())
                 .nivelAcceso(trabajador.getNivelAcceso())
                 .modulos(modulos)
                 .negocios(List.of())

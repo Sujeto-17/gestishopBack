@@ -67,6 +67,10 @@ public class Trabajador {
     @Column(name = "puesto", nullable = false, length = 100)
     private String puesto;
 
+    @ManyToOne(fetch = FetchType.EAGER, optional = false)
+    @JoinColumn(name = "id_tolerancia", nullable = false)
+    private CatTolerancia tolerancia;  // minutos de gracia para retardo, propia del trabajador
+
     @Column(name = "nivel_acceso", nullable = false, length = 20)
     private String nivelAcceso;  // gerente | estandar — controla qué módulos ve
 

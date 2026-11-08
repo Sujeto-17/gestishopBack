@@ -19,6 +19,12 @@ public class LoginResponseDTO {
 
     private UUID uuidUsuario;
 
+    @Schema(description = "Nombre completo del usuario autenticado (se muestra en el encabezado)")
+    private String nombre;
+
+    @Schema(description = "Correo del usuario autenticado (se muestra en el encabezado)")
+    private String correo;
+
     @Schema(description = "Token de acceso JWT de corta duración, se envía en cada request como Bearer")
     private String accessToken;
 
@@ -36,6 +42,9 @@ public class LoginResponseDTO {
 
     @Schema(description = "ID del negocio al que pertenece, no aplica para superadmin", nullable = true)
     private Long idNegocio;
+
+    @Schema(description = "Nombre del negocio activo (se muestra en el pie de página), no aplica para superadmin", nullable = true)
+    private String nombreNegocio;
 
     @Schema(description = "Claves de los módulos que este usuario puede ver en el menú (ej. \"productos\")")
     private List<String> modulos;

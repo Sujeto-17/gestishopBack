@@ -11,6 +11,7 @@ import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.exception.RepositoryExecutor;
 import mx.com.gestishop.core.generic.ErrorFactory;
 import mx.com.gestishop.domain.interfaces.RefreshTokenService;
+import mx.com.gestishop.domain.interfaces.TrabajadorHorarioService;
 import mx.com.gestishop.domain.interfaces.TrabajadorService;
 import mx.com.gestishop.domain.model.Negocio;
 import mx.com.gestishop.domain.model.Trabajador;
@@ -40,10 +41,12 @@ public class TrabajadorServiceImpl implements TrabajadorService {
     private final CatGeneroRepository catGeneroRepository;
     private final CatEstadoCivilRepository catEstadoCivilRepository;
     private final CatMunicipioRepository catMunicipioRepository;
+    private final CatToleranciaRepository catToleranciaRepository;
 
     private final PasswordEncoder passwordEncoder;
 
     private final RefreshTokenService refreshTokenService;
+    private final TrabajadorHorarioService trabajadorHorarioService;   // primer horario del trabajador al darlo de alta
     private final PlanLimites planLimites;   // límites del plan (cuántos trabajadores caben)
 
     @Override
@@ -85,6 +88,9 @@ public class TrabajadorServiceImpl implements TrabajadorService {
 
         Trabajador guardado = RepositoryExecutor.execute(
                 () -> trabajadorRepository.save(trabajador), "Trabajador", "crear");
+
+        // Primer horario: se registra en la misma transacción, así el alta nunca queda sin horario
+        trabajadorHorarioService.asignarInicial(guardado, dto.getHorario());
 
         // Se vuelve a asociar el usuario ya guardado, para que el mapper de respuesta
         // tenga todos los datos completos (uuid, fechas, etc.)
@@ -223,6 +229,10 @@ public class TrabajadorServiceImpl implements TrabajadorService {
         t.setGenero(cargarOpcional(dto.getIdGenero(), catGeneroRepository::findById, "CatGenero"));
         t.setEstadoCivil(cargarOpcional(dto.getIdEstadoCivil(), catEstadoCivilRepository::findById, "CatEstadoCivil"));
         t.setMunicipio(cargarOpcional(dto.getIdMunicipio(), catMunicipioRepository::findById, "CatMunicipio"));
+        t.setTolerancia(RepositoryExecutor.execute(
+                () -> catToleranciaRepository.findById(dto.getIdTolerancia())
+                        .orElseThrow(() -> ErrorFactory.notFound("CatTolerancia", dto.getIdTolerancia())),
+                "CatTolerancia", "consultar"));
     }
 
     private <T> T cargarOpcional(Long id, Function<Long, Optional<T>> buscar, String entidad) {

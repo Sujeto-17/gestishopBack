@@ -41,9 +41,10 @@ public class TrabajadorResponseDTO {
 
     // Laborales
     private String puesto;
-    private String rol;
+    private Long idTolerancia;
+    private Integer toleranciaMinutos;
+    private String toleranciaNombre;
     private String nivelAcceso;
-    private String turno;
     private String tipoContrato;
     private LocalDate fechaIngreso;
     private String notas;

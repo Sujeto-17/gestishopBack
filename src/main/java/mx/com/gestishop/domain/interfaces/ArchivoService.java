@@ -12,12 +12,19 @@ import java.util.List;
 public interface ArchivoService {
 
     /**
-     * Sube un archivo para una entidad específica. Si marcarComoPrincipal es true
-     * (ej. el logo de un negocio), desmarca cualquier otro archivo principal previo
-     * de esa misma entidad+categoría antes de guardar el nuevo.
+     * Sube una imagen asociada a una entidad que cuelga directo de "negocios/{id}" (ej. el logo del negocio).
+     * Si marcarComoPrincipal es true, desmarca cualquier otra principal previa de esa entidad+categoría.
      */
     ArchivoResponseDTO subir(String claveTipoEntidad, Long idEntidad, String categoria,
                              MultipartFile archivo, boolean marcarComoPrincipal);
+
+    /**
+     * Sube una imagen de una entidad que pertenece a un negocio (ej. producto, variante).
+     * Se guarda en "negocios/{idNegocio}/{claveTipo}s/{idEntidad}". El idNegocio debe venir del token,
+     * y quien llama debe haber comprobado ya que la entidad pertenece a ese negocio.
+     */
+    ArchivoResponseDTO subirDeNegocio(String claveTipoEntidad, Long idNegocio, Long idEntidad, String categoria,
+                                      MultipartFile archivo, boolean marcarComoPrincipal);
 
     List<ArchivoResponseDTO> listar(String claveTipoEntidad, Long idEntidad, String categoria);
 }

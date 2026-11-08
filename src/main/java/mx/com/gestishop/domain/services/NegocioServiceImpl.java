@@ -49,7 +49,7 @@ public class NegocioServiceImpl implements NegocioService {
     private final ArchivoService archivoService;
 
     private static final Set<String> TIPOS_LOGO_PERMITIDOS =
-            Set.of("image/jpeg", "image/png", "image/webp");
+            Set.of("image/jpeg", "image/png");
 
     // Carga el municipio (obligatorio para un negocio) o falla con "no encontrado"
     private CatMunicipio cargarMunicipio(Long idMunicipio) {
@@ -271,7 +271,7 @@ public class NegocioServiceImpl implements NegocioService {
         String contentType = archivo.getContentType();
         if (contentType == null || !TIPOS_LOGO_PERMITIDOS.contains(contentType)) {
             throw new ApiResponseException(ApiCodeResponse.CONFLICT,
-                    Map.of("detalle", "El logo debe ser una imagen JPG, PNG o WEBP."));
+                    Map.of("detalle", "El logo debe ser una imagen JPG o PNG."));
         }
     }
 }

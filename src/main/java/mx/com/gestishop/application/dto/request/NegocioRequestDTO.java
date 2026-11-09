@@ -58,18 +58,19 @@ public class NegocioRequestDTO {
     @Schema(description = "RFC (12 caracteres persona moral, 13 persona física)", example = "XAXX010101000", nullable = true)
     private String rfc;
 
-    @Pattern(regexp = "^\\d{3}$", message = "El régimen fiscal es la clave de 3 dígitos del SAT (ej. 601)")
-    @Schema(description = "Clave del régimen fiscal (SAT)", example = "612", nullable = true)
+    @Pattern(regexp = "^\\d{3}$", message = "Selecciona un régimen fiscal del catálogo")
+    @Schema(description = "Clave del régimen fiscal; debe existir en el catálogo del SAT (/catalogos/regimenes-fiscales)", example = "612", nullable = true)
     private String regimenFiscal;
 
     @Pattern(regexp = "^\\d{5}$", message = "El código postal fiscal debe tener 5 dígitos")
     @Schema(description = "Código postal del domicilio fiscal", nullable = true)
     private String codigoPostalFiscal;
 
-    @Email
-    @Size(max = 150)
-    @Schema(description = "Correo al que se envían las facturas", nullable = true)
-    private String correoFacturacion;
+    @Schema(description = "true si el negocio emite factura; false = el IVA no se calcula", defaultValue = "false")
+    private Boolean emiteFactura = false;
+
+    @Schema(description = "Solo aplica si emite factura: true = los precios ya incluyen IVA; false = se suma al facturar", defaultValue = "true")
+    private Boolean preciosIncluyenIva = true;
 
     @Size(max = 300)
     @Schema(description = "Notas internas del superadmin (el negocio no las ve)", nullable = true)
@@ -81,8 +82,10 @@ public class NegocioRequestDTO {
     public void setRfc(String valor) { String v = vacioANull(valor); this.rfc = v == null ? null : v.toUpperCase(); }
     public void setRegimenFiscal(String valor) { this.regimenFiscal = vacioANull(valor); }
     public void setCodigoPostalFiscal(String valor) { this.codigoPostalFiscal = vacioANull(valor); }
-    public void setCorreoFacturacion(String valor) { this.correoFacturacion = vacioANull(valor); }
     public void setNotasInternas(String valor) { this.notasInternas = vacioANull(valor); }
+    // Si el formulario no manda estos dos, se conservan los valores por defecto (no factura, precios con IVA)
+    public void setEmiteFactura(Boolean valor) { this.emiteFactura = valor != null ? valor : false; }
+    public void setPreciosIncluyenIva(Boolean valor) { this.preciosIncluyenIva = valor != null ? valor : true; }
 
     private static String vacioANull(String valor) {
         return valor == null || valor.isBlank() ? null : valor.trim();

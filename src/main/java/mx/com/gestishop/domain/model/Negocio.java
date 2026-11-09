@@ -55,12 +55,20 @@ public class Negocio {
     @Column(name = "codigo_postal_fiscal", length = 5)
     private String codigoPostalFiscal;
 
-    @Column(name = "correo_facturacion", length = 150)
-    private String correoFacturacion;
-
     // Notas privadas del superadmin (acuerdos de pago, contacto...). Nunca se muestran al negocio.
     @Column(name = "notas_internas", length = 300)
     private String notasInternas;
+
+    // --- CONFIGURACIÓN FISCAL (la define el admin del negocio) ---
+    // false = el negocio no factura y el IVA no existe para él; true = emite factura
+    @Builder.Default
+    @Column(name = "emite_factura", nullable = false)
+    private Boolean emiteFactura = false;
+
+    // Solo aplica si emiteFactura: true = el precio público ya trae el IVA; false = se suma al facturar
+    @Builder.Default
+    @Column(name = "precios_incluyen_iva", nullable = false)
+    private Boolean preciosIncluyenIva = true;
 
     @Column(name = "estatus", nullable = false, length = 20)
     private String estatus;  // activo | prueba | inactivo

@@ -2,6 +2,7 @@ package mx.com.gestishop.infrastructure.controller;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import mx.com.gestishop.application.dto.response.RegimenFiscalResponseDTO;
 import mx.com.gestishop.core.dto.ApiDataResponseDTO;
 import mx.com.gestishop.core.dto.CatalogoRefDTO;
 import mx.com.gestishop.core.generic.BaseController;
@@ -36,5 +37,11 @@ public class CatalogoController extends BaseController {
     @GetMapping("/municipios")
     public ResponseEntity<ApiDataResponseDTO<List<CatalogoRefDTO>>> municipios() {
         return ok(catalogoService.municipios());
+    }
+
+    // Regímenes fiscales del SAT para el formulario de datos fiscales del negocio
+    @GetMapping("/regimenes-fiscales")
+    public ResponseEntity<ApiDataResponseDTO<List<RegimenFiscalResponseDTO>>> regimenesFiscales() {
+        return ok(catalogoService.regimenesFiscales());
     }
 }

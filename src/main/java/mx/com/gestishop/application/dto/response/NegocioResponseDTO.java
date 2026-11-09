@@ -68,8 +68,11 @@ public class NegocioResponseDTO {
     @Schema(description = "Código postal fiscal", nullable = true)
     private String codigoPostalFiscal;
 
-    @Schema(description = "Correo de facturación", nullable = true)
-    private String correoFacturacion;
+    @Schema(description = "true si el negocio emite factura")
+    private Boolean emiteFactura;
+
+    @Schema(description = "Solo aplica si emite factura: true = los precios ya incluyen IVA")
+    private Boolean preciosIncluyenIva;
 
     @Schema(description = "Notas internas del superadmin", nullable = true)
     private String notasInternas;

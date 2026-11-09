@@ -125,6 +125,38 @@ COMMENT ON TABLE plan_modulos IS
 -- BLOQUE 4: NEGOCIOS
 -- ============================================================
 
+-- Catálogo oficial del SAT (c_RegimenFiscal, CFDI 4.0): evita que se escriba a mano una clave inválida
+CREATE TABLE cat_regimenes_fiscales (
+    clave           VARCHAR(3)   PRIMARY KEY,            -- '601', '612', '626'...
+    descripcion     VARCHAR(150) NOT NULL UNIQUE,
+    persona_fisica  BOOLEAN      NOT NULL,               -- aplica a personas físicas (RFC de 13 caracteres)
+    persona_moral   BOOLEAN      NOT NULL,               -- aplica a personas morales (RFC de 12 caracteres)
+    estatus         VARCHAR(20)  NOT NULL DEFAULT 'activo' CHECK (estatus IN ('activo','inactivo')),
+    CONSTRAINT ck_regimenes_persona CHECK (persona_fisica OR persona_moral)
+);
+COMMENT ON TABLE cat_regimenes_fiscales IS 'Regímenes fiscales del SAT. Catálogo general; no lo edita nadie desde la aplicación.';
+
+INSERT INTO cat_regimenes_fiscales (clave, descripcion, persona_fisica, persona_moral) VALUES
+  ('601', 'General de Ley Personas Morales', false, true),
+  ('603', 'Personas Morales con Fines no Lucrativos', false, true),
+  ('605', 'Sueldos y Salarios e Ingresos Asimilados a Salarios', true, false),
+  ('606', 'Arrendamiento', true, false),
+  ('607', 'Régimen de Enajenación o Adquisición de Bienes', true, false),
+  ('608', 'Demás ingresos', true, false),
+  ('610', 'Residentes en el Extranjero sin Establecimiento Permanente en México', true, true),
+  ('611', 'Ingresos por Dividendos (socios y accionistas)', true, false),
+  ('612', 'Personas Físicas con Actividades Empresariales y Profesionales', true, false),
+  ('614', 'Ingresos por intereses', true, false),
+  ('615', 'Régimen de los ingresos por obtención de premios', true, false),
+  ('616', 'Sin obligaciones fiscales', true, false),
+  ('620', 'Sociedades Cooperativas de Producción que optan por diferir sus ingresos', false, true),
+  ('621', 'Incorporación Fiscal', true, false),
+  ('622', 'Actividades Agrícolas, Ganaderas, Silvícolas y Pesqueras', true, true),
+  ('623', 'Opcional para Grupos de Sociedades', false, true),
+  ('624', 'Coordinados', false, true),
+  ('625', 'Régimen de las Actividades Empresariales con ingresos a través de Plataformas Tecnológicas', true, false),
+  ('626', 'Régimen Simplificado de Confianza', true, true);
+
 CREATE TABLE negocios (
     id_negocio      BIGSERIAL PRIMARY KEY,
     uuid_negocio    UUID NOT NULL DEFAULT gen_random_uuid(),   -- ID público, se usa en URLs de API
@@ -139,10 +171,12 @@ CREATE TABLE negocios (
     -- Datos de facturación: opcionales, pero van los 4 primeros completos o ninguno
     razon_social         VARCHAR(150),
     rfc                  VARCHAR(13),
-    regimen_fiscal       VARCHAR(3),     -- clave SAT de 3 dígitos (601, 612, 626...)
+    regimen_fiscal       VARCHAR(3) CONSTRAINT fk_negocios_regimen REFERENCES cat_regimenes_fiscales(clave),   -- clave SAT (601, 612, 626...)
     codigo_postal_fiscal VARCHAR(5),
-    correo_facturacion   VARCHAR(150),
     notas_internas       VARCHAR(300),   -- privadas del superadmin, el negocio nunca las ve
+    -- Facturación e IVA del propio negocio (lo define el superadmin al registrarlo; el admin puede ajustarlo)
+    emite_factura        BOOLEAN NOT NULL DEFAULT false,   -- false = no factura y el IVA no existe para él
+    precios_incluyen_iva BOOLEAN NOT NULL DEFAULT true,    -- solo aplica si emite_factura: true = el precio ya trae IVA
     id_plan         BIGINT       NOT NULL REFERENCES planes(id_plan),  -- plan ACTUAL vigente (denormalizado para lectura rápida)
     estatus         VARCHAR(20)  NOT NULL DEFAULT 'prueba'
                     CHECK (estatus IN ('activo','prueba','inactivo')),
@@ -152,7 +186,6 @@ CREATE TABLE negocios (
     updated_at      TIMESTAMPTZ  NOT NULL DEFAULT now(),
     deleted_at      TIMESTAMPTZ,                                  -- soft delete: NULL = activo, fecha = "borrado"
     CONSTRAINT ck_negocios_rfc          CHECK (rfc IS NULL OR rfc ~ '^[A-ZÑ&]{3,4}[0-9]{6}[A-Z0-9]{3}$'),
-    CONSTRAINT ck_negocios_regimen      CHECK (regimen_fiscal IS NULL OR regimen_fiscal ~ '^[0-9]{3}$'),
     CONSTRAINT ck_negocios_cp_fiscal    CHECK (codigo_postal_fiscal IS NULL OR codigo_postal_fiscal ~ '^[0-9]{5}$'),
     CONSTRAINT ck_negocios_fiscal_completo CHECK (
         (rfc IS NULL AND razon_social IS NULL AND regimen_fiscal IS NULL AND codigo_postal_fiscal IS NULL)
@@ -168,6 +201,7 @@ CREATE UNIQUE INDEX ux_negocios_correo ON negocios(correo) WHERE deleted_at IS N
 CREATE INDEX ix_negocios_plan  ON negocios(id_plan);
 CREATE INDEX ix_negocios_giro  ON negocios(id_giro);
 CREATE INDEX ix_negocios_municipio ON negocios(id_municipio);
+CREATE INDEX ix_negocios_regimen ON negocios(regimen_fiscal);
 
 
 -- ============================================================
@@ -703,6 +737,7 @@ CREATE TRIGGER tg_trabajador_horarios_validar
     BEFORE INSERT OR UPDATE ON trabajador_horarios
     FOR EACH ROW EXECUTE FUNCTION fn_trabajador_horarios_validar();
 
+
 -- ============================================================
 -- MIGRACIÓN: INVENTARIO (categorías, atributos, productos con variantes,
 --            proveedores, movimientos de inventario y resurtido)
@@ -722,18 +757,7 @@ CREATE TRIGGER tg_trabajador_horarios_validar
 BEGIN;
 
 -- ------------------------------------------------------------
--- 1. Configuración de IVA del negocio
--- ------------------------------------------------------------
-ALTER TABLE negocios
-    ADD COLUMN emite_factura        BOOLEAN NOT NULL DEFAULT false,
-    ADD COLUMN precios_incluyen_iva BOOLEAN NOT NULL DEFAULT true;
-COMMENT ON COLUMN negocios.emite_factura IS
-  'false = el negocio no factura y el IVA no existe para él. true = factura.';
-COMMENT ON COLUMN negocios.precios_incluyen_iva IS
-  'Solo aplica si emite_factura. true = el precio público ya trae el IVA incluido; false = precio sin IVA, se suma al facturar.';
-
--- ------------------------------------------------------------
--- 2. Catálogos globales
+-- 1. Catálogos globales
 -- ------------------------------------------------------------
 CREATE TABLE cat_unidades_medida (
     id_unidad     BIGSERIAL PRIMARY KEY,
@@ -780,7 +804,7 @@ CREATE TABLE cat_atributos_sugeridos (
 COMMENT ON TABLE cat_atributos_sugeridos IS 'Atributos típicos por giro (Color, Talla, Presentación...) con sus valores, para no empezar de cero.';
 
 -- ------------------------------------------------------------
--- 3. Categorías del negocio (dos niveles)
+-- 2. Categorías del negocio (dos niveles)
 -- ------------------------------------------------------------
 CREATE TABLE categorias (
     id_categoria   BIGSERIAL PRIMARY KEY,
@@ -823,7 +847,7 @@ CREATE TRIGGER tg_categorias_validar BEFORE INSERT OR UPDATE ON categorias
     FOR EACH ROW EXECUTE FUNCTION fn_categorias_validar();
 
 -- ------------------------------------------------------------
--- 4. Atributos de variante (definidos por cada negocio)
+-- 3. Atributos de variante (definidos por cada negocio)
 -- ------------------------------------------------------------
 CREATE TABLE atributos (
     id_atributo    BIGSERIAL PRIMARY KEY,
@@ -849,7 +873,7 @@ CREATE TABLE atributo_valores (
 CREATE UNIQUE INDEX ux_atributo_valores_valor ON atributo_valores(id_atributo, lower(valor));
 
 -- ------------------------------------------------------------
--- 5. Proveedores
+-- 4. Proveedores
 -- ------------------------------------------------------------
 CREATE TABLE proveedores (
     id_proveedor      BIGSERIAL PRIMARY KEY,
@@ -866,11 +890,9 @@ CREATE TABLE proveedores (
     hace_envios       BOOLEAN NOT NULL DEFAULT false,
     costo_envio       NUMERIC(10,2) CHECK (costo_envio IS NULL OR costo_envio >= 0),
     envio_gratis_desde NUMERIC(10,2) CHECK (envio_gratis_desde IS NULL OR envio_gratis_desde >= 0),
-    dias_entrega      SMALLINT CHECK (dias_entrega IS NULL OR dias_entrega >= 0),
     -- Condiciones
     pedido_minimo     NUMERIC(10,2) CHECK (pedido_minimo IS NULL OR pedido_minimo >= 0),
-    dias_credito      SMALLINT NOT NULL DEFAULT 0 CHECK (dias_credito >= 0),
-    formas_pago       VARCHAR(100),
+    formas_pago       VARCHAR(100),               -- 'Contado; MSI con tarjeta'
     calificacion      SMALLINT CHECK (calificacion IS NULL OR calificacion BETWEEN 1 AND 5),   -- apreciación interna
     -- Ubicación
     direccion         VARCHAR(200),
@@ -907,15 +929,22 @@ CREATE UNIQUE INDEX ux_proveedor_contactos_principal ON proveedor_contactos(id_p
 CREATE TABLE proveedor_descuentos (
     id_descuento   BIGSERIAL PRIMARY KEY,
     id_proveedor   BIGINT NOT NULL REFERENCES proveedores(id_proveedor) ON DELETE CASCADE,
-    monto_minimo_mensual NUMERIC(12,2) NOT NULL CHECK (monto_minimo_mensual > 0),   -- cuánto hay que comprar al mes
+    -- mensual    = por compra mensual acumulada ("comprando $10,000 al mes, 5%")
+    -- por_compra = por monto de una sola compra ("en un pedido desde $3,000, 3%")
+    -- fijo       = siempre aplica, sin monto ("cliente frecuente, 2%")
+    tipo           VARCHAR(20) NOT NULL DEFAULT 'mensual' CONSTRAINT ck_prov_desc_tipo CHECK (tipo IN ('mensual','por_compra','fijo')),
+    monto_minimo   NUMERIC(12,2),   -- obligatorio salvo en el tipo fijo
     porcentaje     NUMERIC(5,2) NOT NULL CHECK (porcentaje > 0 AND porcentaje <= 100),
-    descripcion    VARCHAR(150),
-    UNIQUE (id_proveedor, monto_minimo_mensual)
+    descripcion    VARCHAR(150),    -- aclaraciones: "10 % en vinil desde 5 rollos"
+    CONSTRAINT ck_prov_desc_monto CHECK ((tipo = 'fijo' AND monto_minimo IS NULL) OR (tipo <> 'fijo' AND monto_minimo IS NOT NULL AND monto_minimo > 0)),
+    CONSTRAINT uq_prov_desc_escalon UNIQUE (id_proveedor, tipo, monto_minimo)
 );
-COMMENT ON TABLE proveedor_descuentos IS 'Escalones de descuento por volumen: "comprando $10,000 al mes, 5%".';
+-- un solo descuento fijo por proveedor
+CREATE UNIQUE INDEX ux_prov_desc_fijo ON proveedor_descuentos(id_proveedor) WHERE tipo = 'fijo';
+COMMENT ON TABLE proveedor_descuentos IS 'Descuentos del proveedor (informativos): por compra mensual acumulada, por monto de una compra o fijos.';
 
 -- ------------------------------------------------------------
--- 6. Productos y variantes
+-- 5. Productos y variantes
 -- ------------------------------------------------------------
 CREATE TABLE productos (
     id_producto    BIGSERIAL PRIMARY KEY,
@@ -1016,7 +1045,7 @@ CREATE INDEX ix_variante_proveedores_proveedor ON variante_proveedores(id_provee
 COMMENT ON TABLE variante_proveedores IS 'Quién vende cada variante y a qué costo. Permite comparar proveedores. El gerente nunca recibe estos datos.';
 
 -- ------------------------------------------------------------
--- 7. Solicitudes de compra (resurtido)
+-- 6. Solicitudes de compra (resurtido)
 -- ------------------------------------------------------------
 CREATE TABLE solicitudes_compra (
     id_solicitud    BIGSERIAL PRIMARY KEY,
@@ -1052,7 +1081,7 @@ CREATE TABLE solicitud_compra_detalles (
 );
 
 -- ------------------------------------------------------------
--- 8. Movimientos de inventario (única forma de cambiar el stock)
+-- 7. Movimientos de inventario (única forma de cambiar el stock)
 -- ------------------------------------------------------------
 CREATE TABLE movimientos_inventario (
     id_movimiento   BIGSERIAL PRIMARY KEY,
@@ -1155,7 +1184,7 @@ CREATE TRIGGER tg_variantes_stock_proteger BEFORE UPDATE ON variantes
     FOR EACH ROW EXECUTE FUNCTION fn_variantes_stock_proteger();
 
 -- ------------------------------------------------------------
--- 9. Seeds: archivos, módulos y sugerencias por giro
+-- 8. Seeds: archivos, módulos y sugerencias por giro
 -- ------------------------------------------------------------
 INSERT INTO cat_tipos_entidad_archivo (clave, nombre) VALUES
   ('producto', 'Productos'),

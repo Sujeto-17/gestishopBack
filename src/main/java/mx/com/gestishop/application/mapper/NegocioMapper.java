@@ -37,8 +37,9 @@ public class NegocioMapper {
                 .rfc(dto.getRfc())
                 .regimenFiscal(dto.getRegimenFiscal())
                 .codigoPostalFiscal(dto.getCodigoPostalFiscal())
-                .correoFacturacion(dto.getCorreoFacturacion())
                 .notasInternas(dto.getNotasInternas())
+                .emiteFactura(dto.getEmiteFactura())
+                .preciosIncluyenIva(dto.getPreciosIncluyenIva())
                 .estatus("prueba")  // todo negocio nuevo inicia en periodo de prueba
                 .fechaAlta(FechaNegocioUtil.hoy())
                 .vencimiento(FechaNegocioUtil.hoy().plusDays(DIAS_PRUEBA))
@@ -64,8 +65,9 @@ public class NegocioMapper {
                 .rfc(entidad.getRfc())
                 .regimenFiscal(entidad.getRegimenFiscal())
                 .codigoPostalFiscal(entidad.getCodigoPostalFiscal())
-                .correoFacturacion(entidad.getCorreoFacturacion())
                 .notasInternas(entidad.getNotasInternas())
+                .emiteFactura(entidad.getEmiteFactura())
+                .preciosIncluyenIva(entidad.getPreciosIncluyenIva())
                 .plan(mapearPlan(entidad.getPlan()))
                 .estatus(entidad.getEstatus())
                 .fechaAlta(entidad.getFechaAlta())
@@ -108,7 +110,7 @@ public class NegocioMapper {
     }
 
     /**
-     * Copia los datos de facturación y las notas internas del DTO a un negocio que ya existe
+     * Copia los datos de facturación, la configuración de IVA y las notas internas del DTO a un negocio que ya existe
      * (al editar). Al crear se asignan directamente en toEntity().
      */
     public static void aplicarDatosComplementarios(Negocio entidad, NegocioRequestDTO dto) {
@@ -116,7 +118,8 @@ public class NegocioMapper {
         entidad.setRfc(dto.getRfc());
         entidad.setRegimenFiscal(dto.getRegimenFiscal());
         entidad.setCodigoPostalFiscal(dto.getCodigoPostalFiscal());
-        entidad.setCorreoFacturacion(dto.getCorreoFacturacion());
         entidad.setNotasInternas(dto.getNotasInternas());
+        entidad.setEmiteFactura(dto.getEmiteFactura());
+        entidad.setPreciosIncluyenIva(dto.getPreciosIncluyenIva());
     }
 }

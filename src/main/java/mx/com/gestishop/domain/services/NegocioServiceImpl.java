@@ -12,10 +12,7 @@ import mx.com.gestishop.core.generic.ErrorFactory;
 import mx.com.gestishop.domain.interfaces.ArchivoService;
 import mx.com.gestishop.domain.interfaces.NegocioService;
 import mx.com.gestishop.domain.interfaces.SuscripcionService;
-import mx.com.gestishop.domain.model.CatGiroNegocio;
-import mx.com.gestishop.domain.model.CatMunicipio;
-import mx.com.gestishop.domain.model.Negocio;
-import mx.com.gestishop.domain.model.Plan;
+import mx.com.gestishop.domain.model.*;
 import mx.com.gestishop.domain.repository.*;
 import mx.com.gestishop.infrastructure.utils.FechaNegocioUtil;
 import org.springframework.stereotype.Service;
@@ -28,12 +25,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-/**
- * Implementación de la gestión de negocios. Es el último eslabón de la
- * cadena de dependencias: requiere que el giro y el plan ya existan en BD
- * (ambos son FK obligatorias), por eso este servicio se construye AL FINAL,
- * después de tener CatGiroNegocioService y PlanService funcionando.
- */
 @Service
 @RequiredArgsConstructor
 public class NegocioServiceImpl implements NegocioService {
@@ -44,12 +35,13 @@ public class NegocioServiceImpl implements NegocioService {
     private final CatMunicipioRepository catMunicipioRepository;
     private final AdminNegocioRepository adminNegocioRepository;
     private final TrabajadorRepository trabajadorRepository;
+    private final CatRegimenFiscalRepository catRegimenFiscalRepository;
 
     private final SuscripcionService suscripcionService;
     private final ArchivoService archivoService;
 
     private static final Set<String> TIPOS_LOGO_PERMITIDOS =
-            Set.of("image/jpeg", "image/png");
+            Set.of("image/jpeg", "image/png", "image/webp");
 
     // Carga el municipio (obligatorio para un negocio) o falla con "no encontrado"
     private CatMunicipio cargarMunicipio(Long idMunicipio) {
@@ -82,6 +74,34 @@ public class NegocioServiceImpl implements NegocioService {
         if (capturados > 0 && capturados < 4) {
             throw new ApiResponseException(ApiCodeResponse.REQUIRED_DATA,
                     Map.of("detalle", "Para facturar se necesitan los 4 datos fiscales: razón social, RFC, régimen fiscal y código postal fiscal."));
+        }
+
+        if (dto.getRegimenFiscal() != null) validarRegimenFiscal(dto);
+    }
+
+    /**
+     * El régimen debe existir y estar activo en el catálogo del SAT, y ser compatible con el tipo de RFC:
+     * 12 caracteres = persona moral, 13 = persona física (el SAT rechaza facturas con una combinación distinta).
+     */
+    private void validarRegimenFiscal(NegocioRequestDTO dto) {
+        CatRegimenFiscal regimen = RepositoryExecutor.execute(
+                () -> catRegimenFiscalRepository.findById(dto.getRegimenFiscal()).orElse(null),
+                "CatRegimenFiscal", "consultar");
+
+        if (regimen == null || !"activo".equals(regimen.getEstatus())) {
+            throw new ApiResponseException(ApiCodeResponse.CONFLICT,
+                    Map.of("detalle", "El régimen fiscal seleccionado no existe en el catálogo."));
+        }
+
+        if (dto.getRfc() == null) return;
+        boolean esMoral = dto.getRfc().length() == 12;
+        if (esMoral && !regimen.getPersonaMoral()) {
+            throw new ApiResponseException(ApiCodeResponse.CONFLICT,
+                    Map.of("detalle", "El régimen «" + regimen.getDescripcion() + "» no aplica a personas morales (RFC de 12 caracteres)."));
+        }
+        if (!esMoral && !regimen.getPersonaFisica()) {
+            throw new ApiResponseException(ApiCodeResponse.CONFLICT,
+                    Map.of("detalle", "El régimen «" + regimen.getDescripcion() + "» no aplica a personas físicas (RFC de 13 caracteres)."));
         }
     }
 
@@ -271,7 +291,7 @@ public class NegocioServiceImpl implements NegocioService {
         String contentType = archivo.getContentType();
         if (contentType == null || !TIPOS_LOGO_PERMITIDOS.contains(contentType)) {
             throw new ApiResponseException(ApiCodeResponse.CONFLICT,
-                    Map.of("detalle", "El logo debe ser una imagen JPG o PNG."));
+                    Map.of("detalle", "El logo debe ser una imagen JPG, PNG o WEBP."));
         }
     }
 }

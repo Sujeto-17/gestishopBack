@@ -794,15 +794,6 @@ CREATE TABLE cat_categorias_sugeridas (
 );
 COMMENT ON TABLE cat_categorias_sugeridas IS 'Plantillas de categorías por giro. Dos niveles: familia → subfamilia.';
 
-CREATE TABLE cat_atributos_sugeridos (
-    id_sugerido   BIGSERIAL PRIMARY KEY,
-    id_giro       BIGINT NOT NULL REFERENCES cat_giros_negocio(id_giro),
-    nombre        VARCHAR(40) NOT NULL,
-    valores       VARCHAR(500) NOT NULL,   -- valores separados por '|' (ej. 'CH|M|G|XL')
-    UNIQUE (id_giro, nombre)
-);
-COMMENT ON TABLE cat_atributos_sugeridos IS 'Atributos típicos por giro (Color, Talla, Presentación...) con sus valores, para no empezar de cero.';
-
 -- ------------------------------------------------------------
 -- 2. Categorías del negocio (dos niveles)
 -- ------------------------------------------------------------
@@ -847,30 +838,48 @@ CREATE TRIGGER tg_categorias_validar BEFORE INSERT OR UPDATE ON categorias
     FOR EACH ROW EXECUTE FUNCTION fn_categorias_validar();
 
 -- ------------------------------------------------------------
--- 3. Atributos de variante (definidos por cada negocio)
+-- 3. Atributos de variante (catálogo global del sistema)
 -- ------------------------------------------------------------
 CREATE TABLE atributos (
     id_atributo    BIGSERIAL PRIMARY KEY,
     uuid_atributo  UUID NOT NULL DEFAULT gen_random_uuid(),
-    id_negocio     BIGINT NOT NULL REFERENCES negocios(id_negocio),
-    nombre         VARCHAR(40) NOT NULL,       -- 'Color', 'Talla', 'Presentación'
+    nombre         VARCHAR(40) NOT NULL,       -- 'Color', 'Talla', 'Capacidad'
+    orden          SMALLINT NOT NULL DEFAULT 0,
     estatus        VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estatus IN ('activo','inactivo')),
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
-    CONSTRAINT uq_atributos_id_negocio UNIQUE (id_atributo, id_negocio)
+    created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE UNIQUE INDEX ux_atributos_uuid   ON atributos(uuid_atributo);
-CREATE UNIQUE INDEX ux_atributos_nombre ON atributos(id_negocio, lower(nombre));
-COMMENT ON TABLE atributos IS 'Cada negocio define los suyos: una barbería usa "Presentación", una mueblería "Material". El sistema no impone ninguno.';
+CREATE UNIQUE INDEX ux_atributos_nombre ON atributos(lower(nombre));
+COMMENT ON TABLE atributos IS 'Catálogo GLOBAL de atributos de variante (Color, Talla...). Lo administra el superadmin; si un negocio necesita otro, lo solicita.';
 
 CREATE TABLE atributo_valores (
     id_valor       BIGSERIAL PRIMARY KEY,
+    uuid_valor     UUID NOT NULL DEFAULT gen_random_uuid(),
     id_atributo    BIGINT NOT NULL REFERENCES atributos(id_atributo) ON DELETE CASCADE,
+    id_negocio     BIGINT REFERENCES negocios(id_negocio),   -- NULL = valor del sistema; con valor = propio de ese negocio
     valor          VARCHAR(40) NOT NULL,       -- 'Rojo', 'CH', '500 ml'
     orden          SMALLINT NOT NULL DEFAULT 0,
     estatus        VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estatus IN ('activo','inactivo')),
     CONSTRAINT uq_atributo_valores_atributo UNIQUE (id_valor, id_atributo)
 );
-CREATE UNIQUE INDEX ux_atributo_valores_valor ON atributo_valores(id_atributo, lower(valor));
+CREATE UNIQUE INDEX ux_atributo_valores_uuid    ON atributo_valores(uuid_valor);
+CREATE UNIQUE INDEX ux_atributo_valores_global  ON atributo_valores(id_atributo, lower(valor)) WHERE id_negocio IS NULL;
+CREATE UNIQUE INDEX ux_atributo_valores_negocio ON atributo_valores(id_atributo, id_negocio, lower(valor)) WHERE id_negocio IS NOT NULL;
+CREATE INDEX ix_atributo_valores_negocio ON atributo_valores(id_negocio) WHERE id_negocio IS NOT NULL;
+COMMENT ON TABLE atributo_valores IS 'Valores de cada atributo. Los del sistema (id_negocio NULL) los ven todos; los propios solo el negocio que los creó.';
+
+-- Un negocio no puede crear un valor que ya existe en el catálogo del sistema
+CREATE FUNCTION fn_atributo_valores_validar() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.id_negocio IS NOT NULL AND EXISTS (
+        SELECT 1 FROM atributo_valores g
+        WHERE g.id_atributo = NEW.id_atributo AND g.id_negocio IS NULL AND lower(g.valor) = lower(NEW.valor)) THEN
+        RAISE EXCEPTION 'El valor "%" ya existe en el catálogo del sistema', NEW.valor;
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER tg_atributo_valores_validar BEFORE INSERT OR UPDATE OF valor, id_negocio, id_atributo ON atributo_valores
+    FOR EACH ROW EXECUTE FUNCTION fn_atributo_valores_validar();
 
 -- ------------------------------------------------------------
 -- 4. Proveedores
@@ -957,7 +966,6 @@ CREATE TABLE productos (
     descripcion    VARCHAR(500),
     id_unidad      BIGINT NOT NULL REFERENCES cat_unidades_medida(id_unidad),
     tasa_iva       SMALLINT NOT NULL DEFAULT 16 CHECK (tasa_iva IN (0, 8, 16)),
-    es_insumo      BOOLEAN NOT NULL DEFAULT false,   -- se usa para dar un servicio (tijeras, gel): tiene stock y costo pero no se vende
     estatus        VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estatus IN ('activo','inactivo')),
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -968,6 +976,8 @@ CREATE TABLE productos (
 CREATE UNIQUE INDEX ux_productos_uuid ON productos(uuid_producto);
 CREATE INDEX ix_productos_negocio_categoria ON productos(id_negocio, id_categoria);
 CREATE INDEX ix_productos_nombre ON productos(id_negocio, lower(nombre));
+-- mismo nombre + marca + modelo no se repite en el negocio (las presentaciones van como variantes)
+CREATE UNIQUE INDEX ux_productos_identidad ON productos(id_negocio, lower(nombre), lower(COALESCE(marca, '')), lower(COALESCE(modelo, '')));
 COMMENT ON TABLE productos IS 'Ficha general del producto. Lo que se vende y se cuenta son sus variantes.';
 
 -- Qué atributos aplican a cada producto (los valores concretos van en cada variante)
@@ -978,7 +988,7 @@ CREATE TABLE producto_atributos (
     orden          SMALLINT NOT NULL DEFAULT 0,
     PRIMARY KEY (id_producto, id_atributo),
     FOREIGN KEY (id_producto, id_negocio) REFERENCES productos (id_producto, id_negocio) ON DELETE CASCADE,
-    FOREIGN KEY (id_atributo, id_negocio) REFERENCES atributos (id_atributo, id_negocio)
+    FOREIGN KEY (id_atributo) REFERENCES atributos (id_atributo)
 );
 
 CREATE TABLE variantes (
@@ -991,7 +1001,9 @@ CREATE TABLE variantes (
     -- Combinación de valores en forma canónica ('3:12|5:40' = atributo:valor ordenado por atributo).
     -- '' = variante única de un producto simple. Evita variantes duplicadas dentro del mismo producto.
     firma           VARCHAR(200) NOT NULL DEFAULT '',
-    precio_publico  NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (precio_publico >= 0),
+    precio_publico  NUMERIC(12,2) NOT NULL DEFAULT 0 CHECK (precio_publico >= 0),   -- precio de menudeo
+    precio_mayoreo  NUMERIC(12,2) CHECK (precio_mayoreo IS NULL OR precio_mayoreo >= 0),     -- solo negocios tipo tienda
+    cantidad_mayoreo NUMERIC(12,3) CHECK (cantidad_mayoreo IS NULL OR cantidad_mayoreo > 0), -- desde cuántas piezas aplica
     stock_actual    NUMERIC(12,3) NOT NULL DEFAULT 0 CHECK (stock_actual >= 0),   -- lo mueve SOLO el trigger de movimientos
     stock_minimo    NUMERIC(12,3) NOT NULL DEFAULT 0 CHECK (stock_minimo >= 0),
     estatus         VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estatus IN ('activo','inactivo')),
@@ -1000,6 +1012,9 @@ CREATE TABLE variantes (
     CONSTRAINT uq_variantes_id_negocio UNIQUE (id_variante, id_negocio),
     CONSTRAINT uq_variantes_id_producto UNIQUE (id_variante, id_producto),
     CONSTRAINT uq_variantes_firma UNIQUE (id_producto, firma),
+    -- el mayoreo lleva precio y cantidad juntos, y nunca cuesta más que el menudeo
+    CONSTRAINT ck_variantes_mayoreo CHECK ((precio_mayoreo IS NULL AND cantidad_mayoreo IS NULL)
+        OR (precio_mayoreo IS NOT NULL AND cantidad_mayoreo IS NOT NULL AND precio_mayoreo <= precio_publico)),
     FOREIGN KEY (id_producto, id_negocio) REFERENCES productos (id_producto, id_negocio)
 );
 CREATE UNIQUE INDEX ux_variantes_uuid ON variantes(uuid_variante);
@@ -1021,6 +1036,18 @@ CREATE TABLE variante_valores (
     -- y el valor debe pertenecer a ese atributo
     FOREIGN KEY (id_valor, id_atributo) REFERENCES atributo_valores (id_valor, id_atributo)
 );
+
+-- Una variante solo puede usar valores del sistema o propios de su mismo negocio
+CREATE FUNCTION fn_variante_valores_validar() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM atributo_valores av JOIN variantes v ON v.id_variante = NEW.id_variante
+               WHERE av.id_valor = NEW.id_valor AND av.id_negocio IS NOT NULL AND av.id_negocio <> v.id_negocio) THEN
+        RAISE EXCEPTION 'El valor pertenece a otro negocio';
+    END IF;
+    RETURN NEW;
+END $$;
+CREATE TRIGGER tg_variante_valores_validar BEFORE INSERT OR UPDATE ON variante_valores
+    FOR EACH ROW EXECUTE FUNCTION fn_variante_valores_validar();
 
 -- Costo por proveedor de cada variante (privado del admin)
 CREATE TABLE variante_proveedores (
@@ -1184,7 +1211,7 @@ CREATE TRIGGER tg_variantes_stock_proteger BEFORE UPDATE ON variantes
     FOR EACH ROW EXECUTE FUNCTION fn_variantes_stock_proteger();
 
 -- ------------------------------------------------------------
--- 8. Seeds: archivos, módulos y sugerencias por giro
+-- 8. Seeds: archivos, módulos, atributos y sugerencias por giro
 -- ------------------------------------------------------------
 INSERT INTO cat_tipos_entidad_archivo (clave, nombre) VALUES
   ('producto', 'Productos'),
@@ -1222,20 +1249,26 @@ JOIN (VALUES
   ('Abarrotes / minisuper', 'Bebidas', 'Refrescos', 1), ('Abarrotes / minisuper', 'Bebidas', 'Aguas y electrolitos', 2)
 ) AS v(giro, padre, nombre, orden) ON v.giro = g.nombre AND v.padre = p.nombre AND p.id_padre IS NULL;
 
--- Atributos sugeridos
-INSERT INTO cat_atributos_sugeridos (id_giro, nombre, valores)
-SELECT g.id_giro, v.nombre, v.valores
-FROM cat_giros_negocio g
-JOIN (VALUES
-  ('Distribuidor de Materiales', 'Color',  'Blanco|Negro|Rojo|Azul|Verde|Amarillo'),
-  ('Distribuidor de Materiales', 'Talla',  'CH|M|G|XL|XXL'),
-  ('Tiendas de ropa', 'Color',   'Blanco|Negro|Azul|Rojo|Verde'),
-  ('Tiendas de ropa', 'Talla',   'CH|M|G|XL|XXL'),
-  ('Tiendas de ropa', 'Género',  'Caballero|Dama|Niño|Unisex'),
-  ('Abarrotes / minisuper', 'Presentación', 'Lata|600 ml|1 L|1.5 L|2.5 L'),
-  ('Barberías / estéticas', 'Presentación', '100 ml|250 ml|500 ml|1 L'),
-  ('Papelerías', 'Color', 'Negro|Azul|Rojo|Verde')
-) AS v(giro, nombre, valores) ON v.giro = g.nombre;
+-- Atributos globales y sus valores (el superadmin puede agregar más)
+INSERT INTO atributos (nombre, orden) VALUES
+  ('Color', 1), ('Talla', 2), ('Género', 3), ('Presentación', 4), ('Capacidad', 5),
+  ('Ancho', 6), ('Tamaño', 7), ('Material', 8), ('Acabado', 9);
+
+INSERT INTO atributo_valores (id_atributo, valor, orden)
+SELECT a.id_atributo, v.valor, v.ord::smallint
+FROM (VALUES
+  ('Color',        'Blanco|Negro|Rojo|Azul|Verde|Amarillo|Naranja|Rosa|Morado|Gris|Café|Dorado|Plateado'),
+  ('Talla',        'CH|M|G|XL|XXL'),
+  ('Género',       'Caballero|Dama|Niño|Niña|Unisex'),
+  ('Presentación', 'Lata|100 ml|250 ml|500 ml|600 ml|1 L|1.5 L|2.5 L'),
+  ('Capacidad',    '11 oz|15 oz|20 oz|30 oz'),
+  ('Ancho',        '30 cm|45 cm|60 cm|122 cm'),
+  ('Tamaño',       'Carta|Oficio|A4|A3|Tabloide'),
+  ('Material',     'Algodón|Poliéster|Cerámica|Acero inoxidable|Plástico|Papel|Vinil'),
+  ('Acabado',      'Mate|Brillante')
+) AS s(atributo, valores)
+JOIN atributos a ON a.nombre = s.atributo
+CROSS JOIN LATERAL unnest(string_to_array(s.valores, '|')) WITH ORDINALITY AS v(valor, ord);
 
 COMMIT;
 
@@ -1255,6 +1288,9 @@ CREATE TABLE variante_precios_historial (
     id_negocio     BIGINT NOT NULL,
     precio_anterior NUMERIC(12,2),             -- NULL en el alta de la variante
     precio_nuevo   NUMERIC(12,2) NOT NULL,
+    precio_mayoreo_anterior NUMERIC(12,2),
+    precio_mayoreo_nuevo    NUMERIC(12,2),     -- NULL = sin mayoreo
+    cantidad_mayoreo_nueva  NUMERIC(12,3),
     id_usuario     BIGINT REFERENCES usuarios(id_usuario),   -- quién lo cambió (si la app lo informa)
     created_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
     FOREIGN KEY (id_variante, id_negocio) REFERENCES variantes (id_variante, id_negocio)
@@ -1283,14 +1319,17 @@ $$;
 
 CREATE FUNCTION fn_variantes_precio_historial() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-    IF TG_OP = 'INSERT' OR NEW.precio_publico IS DISTINCT FROM OLD.precio_publico THEN
-        INSERT INTO variante_precios_historial (id_variante, id_negocio, precio_anterior, precio_nuevo, id_usuario)
+    IF TG_OP = 'INSERT' OR NEW.precio_publico IS DISTINCT FROM OLD.precio_publico
+       OR NEW.precio_mayoreo IS DISTINCT FROM OLD.precio_mayoreo OR NEW.cantidad_mayoreo IS DISTINCT FROM OLD.cantidad_mayoreo THEN
+        INSERT INTO variante_precios_historial (id_variante, id_negocio, precio_anterior, precio_nuevo,
+                                                precio_mayoreo_anterior, precio_mayoreo_nuevo, cantidad_mayoreo_nueva, id_usuario)
         VALUES (NEW.id_variante, NEW.id_negocio,
-                CASE WHEN TG_OP = 'UPDATE' THEN OLD.precio_publico END, NEW.precio_publico, fn_usuario_app());
+                CASE WHEN TG_OP = 'UPDATE' THEN OLD.precio_publico END, NEW.precio_publico,
+                CASE WHEN TG_OP = 'UPDATE' THEN OLD.precio_mayoreo END, NEW.precio_mayoreo, NEW.cantidad_mayoreo, fn_usuario_app());
     END IF;
     RETURN NEW;
 END $$;
-CREATE TRIGGER tg_variantes_precio_historial AFTER INSERT OR UPDATE OF precio_publico ON variantes
+CREATE TRIGGER tg_variantes_precio_historial AFTER INSERT OR UPDATE OF precio_publico, precio_mayoreo, cantidad_mayoreo ON variantes
     FOR EACH ROW EXECUTE FUNCTION fn_variantes_precio_historial();
 
 CREATE FUNCTION fn_variante_proveedores_costo_historial() RETURNS trigger LANGUAGE plpgsql AS $$

@@ -47,12 +47,15 @@ public class ProductoServiceImpl implements ProductoService {
     private final CatUnidadMedidaRepository unidadRepository;
     private final NegocioRepository negocioRepository;
     private final UsuarioRepository usuarioRepository;
+    private final ProveedorRepository proveedorRepository;
+    private final VarianteProveedorRepository costoRepository;
 
     @PersistenceContext
     private EntityManager entityManager;
 
-    // Variante de la petición ya validada: su firma canónica y los valores elegidos (en el orden de los atributos)
-    private record VarianteResuelta(VarianteRequestDTO dto, String firma, List<AtributoValor> valores) {
+    // Variante de la petición ya validada: su firma canónica, los valores elegidos (en el orden de los atributos)
+    // y el proveedor del costo inicial (null si no se capturó costo)
+    private record VarianteResuelta(VarianteRequestDTO dto, String firma, List<AtributoValor> valores, Proveedor proveedor) {
     }
 
     // --- CONSULTAS ---
@@ -285,6 +288,8 @@ public class ProductoServiceImpl implements ProductoService {
                 : RepositoryExecutor.execute(() -> productoRepository.valoresUsables(uuidsValores, idNegocio), "AtributoValor", "consultar")
                 .stream().collect(Collectors.toMap(AtributoValor::getUuidValor, v -> v));
 
+        Map<UUID, Proveedor> proveedores = resolverProveedores(lista, idNegocio);
+
         List<VarianteResuelta> resueltas = new ArrayList<>();
         Set<String> firmas = new HashSet<>(firmasExistentes);
         Set<String> skus = new HashSet<>();
@@ -292,6 +297,8 @@ public class ProductoServiceImpl implements ProductoService {
 
         for (VarianteRequestDTO dto : lista) {
             VarianteResuelta r = resolverUna(dto, idsAtributos, catalogo);
+            r = new VarianteResuelta(r.dto(), r.firma(), r.valores(),
+                    dto.getUuidProveedor() == null ? null : proveedores.get(dto.getUuidProveedor()));
             if (!firmas.add(r.firma())) {
                 throw conflicto("La combinación " + etiqueta(r.valores()) + " ya existe en el producto.");
             }
@@ -307,6 +314,30 @@ public class ProductoServiceImpl implements ProductoService {
             resueltas.add(r);
         }
         return resueltas;
+    }
+
+    /**
+     * Proveedores de los costos iniciales, consultados una sola vez. Cada variante debe traer proveedor y costo
+     * juntos o ninguno de los dos; el proveedor debe ser del negocio y estar activo.
+     */
+    private Map<UUID, Proveedor> resolverProveedores(List<VarianteRequestDTO> lista, Long idNegocio) {
+        Map<UUID, Proveedor> proveedores = new HashMap<>();
+        for (VarianteRequestDTO dto : lista) {
+            if ((dto.getUuidProveedor() == null) != (dto.getCosto() == null)) {
+                throw conflicto("El costo necesita proveedor, o ninguno de los dos.");
+            }
+            if (dto.getUuidProveedor() == null || proveedores.containsKey(dto.getUuidProveedor())) continue;
+            UUID uuid = dto.getUuidProveedor();
+            Proveedor proveedor = RepositoryExecutor.execute(
+                    () -> proveedorRepository.buscarPorUuid(uuid, idNegocio)
+                            .orElseThrow(() -> ErrorFactory.notFound("Proveedor", uuid)),
+                    "Proveedor", "consultar");
+            if (!"activo".equals(proveedor.getEstatus())) {
+                throw conflicto("El proveedor \"" + proveedor.getNombre() + "\" está inactivo.");
+            }
+            proveedores.put(uuid, proveedor);
+        }
+        return proveedores;
     }
 
     // Exige exactamente un valor por atributo del producto, usable por el negocio, sin repetir atributo
@@ -333,7 +364,7 @@ public class ProductoServiceImpl implements ProductoService {
                 .map(e -> e.getKey() + ":" + e.getValue().getIdValor())
                 .collect(Collectors.joining("|"));
         List<AtributoValor> ordenados = idsAtributos.stream().map(porAtributo::get).toList();
-        return new VarianteResuelta(dto, firma, ordenados);
+        return new VarianteResuelta(dto, firma, ordenados, null);
     }
 
     // Reglas de precios y cantidades de una variante
@@ -395,7 +426,7 @@ public class ProductoServiceImpl implements ProductoService {
 
     // --- PERSISTENCIA DE VARIANTES ---
 
-    // Guarda la variante, sus valores y, si trae existencia, el movimiento de inventario inicial
+    // Guarda la variante, sus valores, el costo inicial (si trae proveedor) y, si trae existencia, el movimiento de inventario inicial
     private Variante crearVariante(Producto producto, VarianteResuelta r, Usuario usuario) {
         VarianteRequestDTO dto = r.dto();
         Variante variante = Variante.builder()
@@ -415,6 +446,18 @@ public class ProductoServiceImpl implements ProductoService {
             RepositoryExecutor.executeVoid(() -> varianteRepository.asignarValor(
                     guardada.getIdVariante(), producto.getIdProducto(),
                     valor.getAtributo().getIdAtributo(), valor.getIdValor()), "VarianteValor", "crear");
+        }
+
+        // Costo inicial opcional: queda como el proveedor preferido de la variante
+        if (r.proveedor() != null) {
+            VarianteProveedor costo = VarianteProveedor.builder()
+                    .variante(guardada)
+                    .proveedor(r.proveedor())
+                    .idNegocio(guardada.getIdNegocio())
+                    .costo(dto.getCosto())
+                    .esPreferido(true)
+                    .build();
+            RepositoryExecutor.execute(() -> costoRepository.save(costo), "VarianteProveedor", "crear");
         }
 
         BigDecimal existencia = existencia(dto);

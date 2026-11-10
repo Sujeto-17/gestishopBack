@@ -23,4 +23,13 @@ public class VarianteRequestDTO extends VarianteDatosRequestDTO {
     @Digits(integer = 9, fraction = 3)
     @Schema(description = "Existencia con la que arranca; 0 o vacío = se registra sin stock. Se guarda como movimiento 'inventario_inicial'")
     private BigDecimal existenciaInicial;
+
+    @Schema(description = "Proveedor que surte esta variante (opcional). Va junto con costo")
+    private UUID uuidProveedor;
+
+    @DecimalMin("0.00")
+    @Digits(integer = 10, fraction = 2)
+    @Schema(description = "Costo de compra con ese proveedor (opcional). Va junto con uuidProveedor y queda como proveedor preferido")
+    private BigDecimal costo;
 }
+

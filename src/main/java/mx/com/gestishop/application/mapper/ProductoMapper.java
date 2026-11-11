@@ -15,7 +15,7 @@ public class ProductoMapper {
     }
 
     // Fila del listado; el resumen sale de una consulta agrupada (null si el producto no tiene variantes activas)
-    public static ProductoListadoResponseDTO toListado(Producto p, Object[] resumen) {
+    public static ProductoListadoResponseDTO toListado(Producto p, Object[] resumen, String fotoPrincipal) {
         return ProductoListadoResponseDTO.builder()
                 .uuidProducto(p.getUuidProducto())
                 .nombre(p.getNombre())
@@ -30,6 +30,7 @@ public class ProductoMapper {
                 .stockTotal(resumen == null ? BigDecimal.ZERO : (BigDecimal) resumen[2])
                 .precioDesde(resumen == null ? null : (BigDecimal) resumen[3])
                 .precioHasta(resumen == null ? null : (BigDecimal) resumen[4])
+                .fotoPrincipal(fotoPrincipal)
                 .variantesSinExistencia(resumen == null ? 0 : ((Number) resumen[5]).intValue())
                 .variantesStockBajo(resumen == null ? 0 : ((Number) resumen[6]).intValue())
                 .build();

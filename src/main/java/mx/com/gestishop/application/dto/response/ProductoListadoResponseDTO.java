@@ -27,6 +27,9 @@ public class ProductoListadoResponseDTO {
     private BigDecimal precioDesde;
     private BigDecimal precioHasta;
 
+    @Schema(description = "Ruta de la miniatura de la foto principal, lista para usarse como src (/api/v1/archivos/ver/...); null si no tiene fotos")
+    private String fotoPrincipal;
+
     @Schema(description = "Variantes activas con stock 0")
     private int variantesSinExistencia;
 

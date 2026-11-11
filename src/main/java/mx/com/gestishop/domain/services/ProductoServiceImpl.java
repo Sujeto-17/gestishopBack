@@ -13,6 +13,7 @@ import mx.com.gestishop.core.enums.ApiCodeResponse;
 import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.exception.RepositoryExecutor;
 import mx.com.gestishop.core.generic.ErrorFactory;
+import mx.com.gestishop.domain.interfaces.ProductoFotoService;
 import mx.com.gestishop.domain.interfaces.ProductoService;
 import mx.com.gestishop.domain.model.*;
 import mx.com.gestishop.domain.repository.*;
@@ -48,6 +49,7 @@ public class ProductoServiceImpl implements ProductoService {
     private final NegocioRepository negocioRepository;
     private final UsuarioRepository usuarioRepository;
     private final ProveedorRepository proveedorRepository;
+    private final ProductoFotoService fotoService;
     private final VarianteProveedorRepository costoRepository;
 
     @PersistenceContext
@@ -78,8 +80,9 @@ public class ProductoServiceImpl implements ProductoService {
         Map<Long, Object[]> resumen = RepositoryExecutor.execute(
                         () -> productoRepository.resumenVariantes(idNegocio), "Variante", "resumir").stream()
                 .collect(Collectors.toMap(r -> ((Number) r[0]).longValue(), r -> r));
+        Map<Long, String> fotos = fotoService.miniaturasPrincipales(idNegocio);
         return productos.stream()
-                .map(p -> ProductoMapper.toListado(p, resumen.get(p.getIdProducto())))
+                .map(p -> ProductoMapper.toListado(p, resumen.get(p.getIdProducto()), fotos.get(p.getIdProducto())))
                 .toList();
     }
 
@@ -183,7 +186,8 @@ public class ProductoServiceImpl implements ProductoService {
             RepositoryExecutor.execute(() -> productoRepository.save(producto), "Producto", "desactivar");
             return;
         }
-        // Sin movimientos: se borran los historiales de alta, las variantes y el producto
+        // Sin movimientos: se borran las fotos, los historiales de alta, las variantes y el producto
+        fotoService.eliminarTodas(id);
         RepositoryExecutor.executeVoid(() -> productoRepository.borrarHistorialPrecios(id), "Producto", "eliminar");
         RepositoryExecutor.executeVoid(() -> productoRepository.borrarHistorialCostos(id), "Producto", "eliminar");
         RepositoryExecutor.executeVoid(() -> productoRepository.borrarVariantes(id), "Producto", "eliminar");

@@ -1,5 +1,8 @@
 package mx.com.gestishop.core.utils;
 
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 import java.util.Locale;
@@ -28,5 +31,13 @@ public class DateUtils {
     // Genera la cadena de ubicación y fecha larga ("Villahermosa, Tabasco, Jueves...")
     public static String formatearFechaLugar(TemporalAccessor fecha) {
         return "Villahermosa, Tabasco, " + formatearLargaCapitalizada(fecha);
+    }
+
+    // La fecha de una consulta nativa puede llegar como OffsetDateTime, Instant o Timestamp según el driver
+    public static OffsetDateTime aOffsetDateTime(Object valor) {
+        if (valor instanceof OffsetDateTime o) return o;
+        if (valor instanceof Instant i) return i.atZone(ZoneId.systemDefault()).toOffsetDateTime();
+        if (valor instanceof java.sql.Timestamp t) return t.toInstant().atZone(ZoneId.systemDefault()).toOffsetDateTime();
+        return null;
     }
 }

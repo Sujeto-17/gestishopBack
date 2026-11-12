@@ -25,6 +25,15 @@ public interface VarianteRepository extends JpaRepository<Variante, Long> {
     Optional<Variante> buscarPorUuid(@Param("uuid") UUID uuid, @Param("idProducto") Long idProducto,
                                      @Param("idNegocio") Long idNegocio);
 
+    // Una variante del negocio con su producto y unidad de medida cargados (para registrar movimientos de inventario)
+    @Query("""
+            SELECT v FROM Variante v
+            JOIN FETCH v.producto p
+            JOIN FETCH p.unidad
+            WHERE v.uuidVariante = :uuid AND v.idNegocio = :idNegocio
+            """)
+    Optional<Variante> buscarPorUuidEnNegocio(@Param("uuid") UUID uuid, @Param("idNegocio") Long idNegocio);
+
     // ¿Otro SKU igual en el negocio (sin distinguir mayúsculas)?
     @Query("""
             SELECT COUNT(v) > 0 FROM Variante v

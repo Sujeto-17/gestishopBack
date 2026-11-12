@@ -11,6 +11,7 @@ import mx.com.gestishop.core.enums.ApiCodeResponse;
 import mx.com.gestishop.core.exception.ApiResponseException;
 import mx.com.gestishop.core.exception.RepositoryExecutor;
 import mx.com.gestishop.core.generic.ErrorFactory;
+import mx.com.gestishop.core.utils.DateUtils;
 import mx.com.gestishop.domain.interfaces.VarianteCostoService;
 import mx.com.gestishop.domain.model.Producto;
 import mx.com.gestishop.domain.model.Proveedor;
@@ -71,7 +72,7 @@ public class VarianteCostoServiceImpl implements VarianteCostoService {
                         () -> costoRepository.historial(variante.getIdVariante(), idNegocio), "VarianteProveedor", "historial")
                 .stream()
                 .map(r -> HistorialCostoResponseDTO.builder()
-                        .fecha(aFecha(r[0]))
+                        .fecha(DateUtils.aOffsetDateTime(r[0]))
                         .uuidProveedor(UUID.fromString(String.valueOf(r[1])))
                         .proveedor((String) r[2])
                         .costoAnterior((BigDecimal) r[3])
@@ -156,6 +157,27 @@ public class VarianteCostoServiceImpl implements VarianteCostoService {
         }
         entityManager.clear();
         return unaVariante(idProducto, idNegocio, uuidVariante);
+    }
+
+    // Registra el costo de una compra: crea el proveedor de la variante si no estaba o actualiza su costo
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public void registrarCostoDeCompra(Long idVariante, UUID uuidProveedor, BigDecimal costo, Long idNegocio) {
+        Proveedor proveedor = buscarProveedor(uuidProveedor, idNegocio);
+        Optional<VarianteProveedor> existente = RepositoryExecutor.execute(
+                () -> costoRepository.buscar(idVariante, proveedor.getIdProveedor()), "VarianteProveedor", "consultar");
+        // Un proveedor inactivo no se agrega como nuevo; el costo de la compra queda solo en el movimiento
+        if (existente.isEmpty() && !"activo".equals(proveedor.getEstatus())) return;
+
+        // Se conservan el código, las notas y la última compra que ya tuviera el proveedor
+        VarianteProveedorRequestDTO dto = new VarianteProveedorRequestDTO();
+        dto.setCosto(costo);
+        existente.ifPresent(e -> {
+            dto.setCodigoProveedor(e.getCodigoProveedor());
+            dto.setNotas(e.getNotas());
+            dto.setUltimaCompra(e.getUltimaCompra());
+        });
+        aplicar(idVariante, idNegocio, proveedor, dto);
     }
 
     // --- LÓGICA INTERNA ---
@@ -270,14 +292,6 @@ public class VarianteCostoServiceImpl implements VarianteCostoService {
                 .build();
     }
 
-    // La fecha de una consulta nativa puede llegar como OffsetDateTime, Instant o Timestamp según el driver
-    private OffsetDateTime aFecha(Object valor) {
-        if (valor instanceof OffsetDateTime o) return o;
-        if (valor instanceof Instant i) return i.atZone(ZoneId.systemDefault()).toOffsetDateTime();
-        if (valor instanceof java.sql.Timestamp t) return t.toInstant().atZone(ZoneId.systemDefault()).toOffsetDateTime();
-        return null;
-    }
-
     // --- BÚSQUEDAS ---
 
     private Producto buscarProducto(UUID uuid, Long idNegocio) {
@@ -313,4 +327,3 @@ public class VarianteCostoServiceImpl implements VarianteCostoService {
         return new ApiResponseException(ApiCodeResponse.CONFLICT, Map.of("detalle", detalle));
     }
 }
-

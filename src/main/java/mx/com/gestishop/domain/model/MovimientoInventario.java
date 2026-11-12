@@ -56,6 +56,15 @@ public class MovimientoInventario {
     @JoinColumn(name = "id_usuario", nullable = false, updatable = false)
     private Usuario usuario;
 
+    // Proveedor de la compra (solo en resurtidos)
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "id_proveedor", updatable = false)
+    private Proveedor proveedor;
+
+    // Privado del admin; puede quedar vacío y completarse después (la BD solo permite hacerlo una vez, con UPDATE directo)
+    @Column(name = "costo_unitario", precision = 12, scale = 2, updatable = false)
+    private BigDecimal costoUnitario;
+
     @Column(name = "notas", length = 300, updatable = false)
     private String notas;
 

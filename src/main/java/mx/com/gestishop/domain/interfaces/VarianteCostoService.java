@@ -4,6 +4,7 @@ import mx.com.gestishop.application.dto.request.VarianteProveedorRequestDTO;
 import mx.com.gestishop.application.dto.response.HistorialCostoResponseDTO;
 import mx.com.gestishop.application.dto.response.VarianteCostosResponseDTO;
 
+import java.math.BigDecimal;
 import java.util.List;
 import java.util.UUID;
 
@@ -24,6 +25,10 @@ public interface VarianteCostoService {
 
     // Quita al proveedor de la variante; si era el preferido, pasa a serlo el de menor costo
     VarianteCostosResponseDTO quitar(UUID uuidProducto, UUID uuidVariante, UUID uuidProveedor, Long idNegocio);
+
+    // Registra el costo de una compra: crea el proveedor de la variante si no estaba o actualiza su costo.
+    // No cambia el proveedor preferido (salvo que sea el primero de la variante).
+    void registrarCostoDeCompra(Long idVariante, UUID uuidProveedor, BigDecimal costo, Long idNegocio);
 
     // Últimos cambios de costo de la variante
     List<HistorialCostoResponseDTO> historial(UUID uuidProducto, UUID uuidVariante, Long idNegocio);
